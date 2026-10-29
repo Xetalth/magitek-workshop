@@ -17,7 +17,7 @@ export const TopHud: React.FC<TopHudProps> = ({ hud }) => {
         <View style={styles.badgeGroup}>
           <View style={styles.levelBadge}>
             <Ionicons name="construct-outline" size={13} color={COLORS.neonAmberBright} />
-            <Text style={styles.levelText} numberOfLines={1}>
+            <Text style={styles.levelText} numberOfLines={1} ellipsizeMode="tail">
               {hud.levelTitle}
             </Text>
           </View>
@@ -107,6 +107,7 @@ const styles = StyleSheet.create({
     paddingVertical: 3,
     borderRadius: 8,
     flexShrink: 1,
+    maxWidth: 155,
   },
   levelText: {
     color: COLORS.neonAmberBright,
@@ -114,6 +115,7 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     letterSpacing: 0.2,
     flexShrink: 1,
+    maxWidth: 125,
   },
   dayBadge: {
     flexDirection: 'row',

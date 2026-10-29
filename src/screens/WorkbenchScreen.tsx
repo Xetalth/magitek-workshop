@@ -192,11 +192,33 @@ export const WorkbenchScreen: React.FC<WorkbenchScreenProps> = ({
         </TouchableOpacity>
       </View>
 
+      {/* Dinamik Görev / Gemini API Yükleme Durumu */}
+      {data.isLoadingDynamicTask && (
+        <View style={styles.loadingBanner}>
+          <ActivityIndicator size="small" color={COLORS.neonAmberBright} />
+          <View style={styles.loadingContent}>
+            <Text style={styles.loadingTitle}>⚙️ Makina Şebekesinden Telemetri Alınıyor...</Text>
+            <Text style={styles.loadingSubtitle}>
+              Groq AI (openai/gpt-oss-120b) ile gömülü C arızası ve test harness senkronize ediliyor...
+            </Text>
+          </View>
+        </View>
+      )}
+
       {/* Donanım Telemetri & Teşhis Paneli */}
       <View style={[styles.telemetryCard, isOverheating && styles.telemetryCardOverheating]}>
         <View style={styles.telemetryTop}>
           <View style={styles.deviceMeta}>
-            <Text style={styles.deviceNameText}>{activeMod.deviceName}</Text>
+            <View style={styles.deviceNameRow}>
+              <Text style={styles.deviceNameText}>{activeMod.deviceName}</Text>
+              {(activeMod.id.startsWith('dynamic_task_') ||
+                activeMod.deviceName.includes('[CANLI AI]')) && (
+                <View style={styles.liveAiBadge}>
+                  <Ionicons name="sparkles" size={10} color={COLORS.neonGreenBright} />
+                  <Text style={styles.liveAiBadgeText}>CANLI AI</Text>
+                </View>
+              )}
+            </View>
             <Text style={styles.deviceCodeText}>{activeMod.deviceCode}</Text>
           </View>
 
@@ -378,11 +400,11 @@ export const WorkbenchScreen: React.FC<WorkbenchScreenProps> = ({
         <TouchableOpacity
           style={[
             styles.compileButton,
-            !data.selectedPatchId && styles.compileButtonDisabled,
+            (!data.selectedPatchId || data.isLoadingDynamicTask) && styles.compileButtonDisabled,
             isCompiling && styles.compileButtonLoading,
           ]}
           onPress={handleCompilePress}
-          disabled={!data.selectedPatchId || isCompiling}
+          disabled={!data.selectedPatchId || isCompiling || data.isLoadingDynamicTask}
           activeOpacity={0.8}
         >
           {isCompiling ? (
@@ -393,6 +415,8 @@ export const WorkbenchScreen: React.FC<WorkbenchScreenProps> = ({
           <Text style={styles.compileButtonText}>
             {isCompiling
               ? 'DERLENİYOR & BİRİM TESTLERİ KOŞULUYOR...'
+              : data.isLoadingDynamicTask
+              ? 'TELEMETRİ EŞİTLENİYOR...'
               : 'DERLE & TEST ET (gcc -Wall -O2)'}
           </Text>
         </TouchableOpacity>
@@ -656,6 +680,33 @@ const styles = StyleSheet.create({
     gap: 8,
     width: '100%',
   },
+  loadingBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    backgroundColor: 'rgba(245, 158, 11, 0.1)',
+    borderWidth: 1,
+    borderColor: 'rgba(245, 158, 11, 0.45)',
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    marginBottom: 2,
+  },
+  loadingContent: {
+    flex: 1,
+  },
+  loadingTitle: {
+    color: COLORS.neonAmberBright,
+    fontSize: 11.5,
+    fontWeight: '800',
+    letterSpacing: 0.3,
+  },
+  loadingSubtitle: {
+    color: COLORS.textMuted,
+    fontSize: 10,
+    marginTop: 2,
+    lineHeight: 14,
+  },
   dropdownButton: {
     flex: 1,
     backgroundColor: COLORS.bgCard,
@@ -899,6 +950,29 @@ const styles = StyleSheet.create({
   },
   deviceMeta: {
     flex: 1,
+  },
+  deviceNameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    flexWrap: 'wrap',
+  },
+  liveAiBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    backgroundColor: 'rgba(16, 185, 129, 0.16)',
+    borderWidth: 1,
+    borderColor: COLORS.neonGreenBright,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+  },
+  liveAiBadgeText: {
+    color: COLORS.neonGreenBright,
+    fontSize: 9,
+    fontWeight: '800',
+    letterSpacing: 0.5,
   },
   deviceNameText: {
     color: COLORS.textPrimary,

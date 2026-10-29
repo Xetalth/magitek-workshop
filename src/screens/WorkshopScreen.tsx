@@ -147,7 +147,9 @@ export const WorkshopScreen: React.FC<WorkshopScreenProps> = ({
                 <View style={styles.rewardHeader}>
                   <View style={styles.rewardHeaderLeft}>
                     <Ionicons name="clipboard-outline" size={15} color={COLORS.neonAmberBright} />
-                    <Text style={styles.rewardHeaderTitle}>GÖREV RAPORU & MÜHENDİSLİK TELEMETRİSİ</Text>
+                    <Text style={styles.rewardHeaderTitle} numberOfLines={1}>
+                      MÜHENDİSLİK TELEMETRİSİ
+                    </Text>
                   </View>
                   <View style={styles.rewardApprovedBadge}>
                     <Ionicons name="checkmark-sharp" size={11} color={COLORS.neonGreenBright} />
@@ -197,17 +199,17 @@ export const WorkshopScreen: React.FC<WorkshopScreenProps> = ({
                 {/* Tek Ana Eylem Butonu */}
                 <TouchableOpacity
                   style={styles.nextTaskButton}
-                  onPress={hasNext ? onNextModule : onGoToWorkbench}
+                  onPress={onNextModule}
                   activeOpacity={0.8}
                 >
-                  <Text style={styles.nextTaskButtonText}>
+                  <Text style={styles.nextTaskButtonText} numberOfLines={1}>
                     {hasNext
                       ? '➔ Sıradaki Mühendislik Görevine İlerle'
                       : '➔ 1. Sınıf Müfredatı Tamamlandı (Tezgâha Git)'}
                   </Text>
                   <Ionicons
-                    name={hasNext ? 'arrow-forward-circle' : 'hammer'}
-                    size={18}
+                    name={hasNext ? 'arrow-forward-circle' : 'flash'}
+                    size={16}
                     color={COLORS.bgPrimary}
                   />
                 </TouchableOpacity>
@@ -437,14 +439,19 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 6,
     flex: 1,
+    flexShrink: 1,
+    marginRight: 8,
   },
   rewardHeaderTitle: {
     color: COLORS.neonAmberBright,
     fontSize: 10,
     fontWeight: '800',
-    letterSpacing: 0.4,
+    letterSpacing: 0.3,
+    flex: 1,
+    flexShrink: 1,
   },
   rewardApprovedBadge: {
+    flexShrink: 0,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 3,
@@ -545,21 +552,23 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 8,
+    gap: 6,
     backgroundColor: COLORS.neonAmberBright,
     paddingVertical: 10,
+    paddingHorizontal: 8,
     borderRadius: 10,
     shadowColor: COLORS.neonAmber,
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.3,
     shadowRadius: 6,
     elevation: 4,
-    marginTop: 2,
+    marginTop: 4,
+    width: '100%',
   },
   nextTaskButtonText: {
     color: COLORS.bgPrimary,
-    fontSize: 11.5,
-    fontWeight: '800',
-    letterSpacing: 0.2,
+    fontSize: 13,
+    fontWeight: 'bold',
+    letterSpacing: 0.1,
   },
 });

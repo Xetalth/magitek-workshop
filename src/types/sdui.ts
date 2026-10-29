@@ -1,6 +1,6 @@
 export type TabType = 'shop' | 'skills' | 'workshop' | 'workbench' | 'room';
 
-export type ModuleId = 'module_1_loops' | 'module_2_memory' | 'module_3_structs' | 'module_4_testing';
+export type ModuleId = string;
 
 export interface HudState {
   levelTitle: string; // "Lv.1 Bağımsız Mühendis"
@@ -74,6 +74,7 @@ export interface WorkbenchState {
   };
   terminalLogs: string[];
   lastTestSuccess?: boolean;
+  isLoadingDynamicTask?: boolean;
 }
 
 export interface TaskRewardReport {
