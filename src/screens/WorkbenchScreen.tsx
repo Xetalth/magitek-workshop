@@ -6,6 +6,7 @@ import {
   TouchableOpacity,
   ScrollView,
   ActivityIndicator,
+  Modal,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { WorkbenchState, ModuleId } from '../types/sdui';
@@ -19,6 +20,45 @@ interface WorkbenchScreenProps {
   onGoToWorkshop: () => void;
 }
 
+interface ClassItem {
+  id: string;
+  level: string;
+  title: string;
+  subtitle: string;
+  isUnlocked: boolean;
+}
+
+const CURRICULUM_CLASSES: ClassItem[] = [
+  {
+    id: 'class_1',
+    level: '1. Sınıf',
+    title: '1. Sınıf: Algoritmalar & C',
+    subtitle: 'Temel Mantık, Döngüler, Göstericiler (Pointers), Bellek & Structs',
+    isUnlocked: true,
+  },
+  {
+    id: 'class_2',
+    level: '2. Sınıf',
+    title: '2. Sınıf: Veri Yapıları & Bellek',
+    subtitle: 'Bağlı Listeler, Ağaçlar, Heap Optimizasyonu & Buffer Tasarımı',
+    isUnlocked: false,
+  },
+  {
+    id: 'class_3',
+    level: '3. Sınıf',
+    title: '3. Sınıf: İşletim Sistemleri & Çekirdek',
+    subtitle: 'Donanım Kesmeleri (Interrupts), Sürücüler & Eşzamanlılık',
+    isUnlocked: false,
+  },
+  {
+    id: 'class_4',
+    level: '4. Sınıf',
+    title: '4. Sınıf: Dağıtık Sistemler & Mimari',
+    subtitle: 'Gömülü Magitek Bus, Protokol Doğrulama & Güvenilirlik',
+    isUnlocked: false,
+  },
+];
+
 export const WorkbenchScreen: React.FC<WorkbenchScreenProps> = ({
   data,
   onSelectModule,
@@ -27,6 +67,9 @@ export const WorkbenchScreen: React.FC<WorkbenchScreenProps> = ({
   onGoToWorkshop,
 }) => {
   const [isCompiling, setIsCompiling] = useState(false);
+  const [classModalVisible, setClassModalVisible] = useState(false);
+  const [taskModalVisible, setTaskModalVisible] = useState(false);
+
   const activeMod = data.activeModule;
   const isOverheating = data.hardwareTelemetry.temperatureC > 75;
   const isRepaired = data.inspectionStatus === 'REPAIRED';
@@ -110,47 +153,43 @@ export const WorkbenchScreen: React.FC<WorkbenchScreenProps> = ({
 
   return (
     <ScrollView style={styles.screen} contentContainerStyle={styles.contentContainer}>
-      {/* 1. Sınıf Modül Gezgini (Curriculum Module Switcher) */}
-      <View style={styles.moduleSwitcherCard}>
-        <View style={styles.moduleSwitcherHeader}>
-          <Ionicons name="school-outline" size={14} color={COLORS.neonCyanBright} />
-          <Text style={styles.moduleSwitcherTitle}>1. SINIF MÜHENDİSLİK MÜFREDATI // TEZGÂH MODÜLÜ SEÇİN</Text>
-        </View>
+      {/* İkili Magitek Dropdown Navigasyon Sistemi (Pill Bar Yerine) */}
+      <View style={styles.dropdownContainer}>
+        {/* Sol Dropdown: Aşama / Sınıf Seçici */}
+        <TouchableOpacity
+          style={styles.dropdownButton}
+          onPress={() => setClassModalVisible(true)}
+          activeOpacity={0.8}
+        >
+          <View style={styles.dropdownTopRow}>
+            <Ionicons name="school-outline" size={12} color={COLORS.neonCyanBright} />
+            <Text style={styles.dropdownCategory}>AŞAMA // SINIF</Text>
+          </View>
+          <View style={styles.dropdownValueRow}>
+            <Text style={styles.dropdownValueText} numberOfLines={1}>
+              1. Sınıf: Algoritmalar & C
+            </Text>
+            <Ionicons name="chevron-down" size={14} color={COLORS.neonAmberBright} />
+          </View>
+        </TouchableOpacity>
 
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.modulePillScroll}>
-          {data.availableModules.map((m, index) => {
-            const isSelected = m.id === activeMod.id;
-            return (
-              <TouchableOpacity
-                key={m.id}
-                style={[
-                  styles.modulePill,
-                  isSelected && styles.modulePillActive,
-                  m.isCompleted && styles.modulePillCompleted,
-                ]}
-                onPress={() => onSelectModule(m.id)}
-                activeOpacity={0.7}
-              >
-                <View style={styles.pillIndexBadge}>
-                  <Text style={styles.pillIndexText}>{index + 1}</Text>
-                </View>
-                <Text
-                  style={[
-                    styles.modulePillText,
-                    isSelected && styles.modulePillTextActive,
-                    m.isCompleted && styles.modulePillTextCompleted,
-                  ]}
-                  numberOfLines={1}
-                >
-                  {m.title.split('(')[0]}
-                </Text>
-                {m.isCompleted && (
-                  <Ionicons name="checkmark-circle" size={14} color={COLORS.neonGreenBright} />
-                )}
-              </TouchableOpacity>
-            );
-          })}
-        </ScrollView>
+        {/* Sağ Dropdown: Görev / Arıza Seçici */}
+        <TouchableOpacity
+          style={[styles.dropdownButton, styles.dropdownButtonTask]}
+          onPress={() => setTaskModalVisible(true)}
+          activeOpacity={0.8}
+        >
+          <View style={styles.dropdownTopRow}>
+            <Ionicons name="hardware-chip-outline" size={12} color={COLORS.neonAmberBright} />
+            <Text style={styles.dropdownCategory}>GÖREV // ARIZALI CİHAZ</Text>
+          </View>
+          <View style={styles.dropdownValueRow}>
+            <Text style={[styles.dropdownValueText, styles.dropdownValueTextTask]} numberOfLines={1}>
+              {activeMod.deviceName.split('(')[0].trim()}
+            </Text>
+            <Ionicons name="chevron-down" size={14} color={COLORS.neonCyanBright} />
+          </View>
+        </TouchableOpacity>
       </View>
 
       {/* Donanım Telemetri & Teşhis Paneli */}
@@ -405,6 +444,199 @@ export const WorkbenchScreen: React.FC<WorkbenchScreenProps> = ({
           })}
         </View>
       </View>
+
+      {/* 1. Sol Modal: Aşama / Sınıf Seçici */}
+      <Modal
+        visible={classModalVisible}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setClassModalVisible(false)}
+      >
+        <TouchableOpacity
+          style={styles.modalBackdrop}
+          activeOpacity={1}
+          onPress={() => setClassModalVisible(false)}
+        >
+          <View
+            style={styles.modalCard}
+            onStartShouldSetResponder={() => true}
+          >
+            <View style={styles.modalHeader}>
+              <View style={styles.modalHeaderTitleRow}>
+                <Ionicons name="school-outline" size={16} color={COLORS.neonCyanBright} />
+                <Text style={styles.modalHeaderTitle}>MÜHENDİSLİK SINIFI SEÇİN</Text>
+              </View>
+              <TouchableOpacity onPress={() => setClassModalVisible(false)}>
+                <Ionicons name="close-circle-outline" size={20} color={COLORS.textMuted} />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView style={styles.modalList} showsVerticalScrollIndicator={false}>
+              {CURRICULUM_CLASSES.map((cls) => {
+                const isSelected = cls.id === 'class_1';
+                return (
+                  <TouchableOpacity
+                    key={cls.id}
+                    style={[
+                      styles.modalOptionCard,
+                      cls.isUnlocked ? styles.modalOptionUnlocked : styles.modalOptionLocked,
+                      isSelected && styles.modalOptionActive,
+                    ]}
+                    disabled={!cls.isUnlocked}
+                    onPress={() => {
+                      setClassModalVisible(false);
+                    }}
+                    activeOpacity={0.8}
+                  >
+                    <View style={styles.optionTopRow}>
+                      <View style={styles.optionTitleRow}>
+                        <Ionicons
+                          name={cls.isUnlocked ? (isSelected ? 'radio-button-on' : 'school') : 'lock-closed'}
+                          size={15}
+                          color={cls.isUnlocked ? (isSelected ? COLORS.neonCyanBright : COLORS.neonGreenBright) : COLORS.textMuted}
+                        />
+                        <Text
+                          style={[
+                            styles.optionTitle,
+                            cls.isUnlocked ? (isSelected ? styles.optionTitleActive : styles.optionTitleUnlocked) : styles.optionTitleLocked,
+                          ]}
+                        >
+                          {cls.title}
+                        </Text>
+                      </View>
+
+                      <View
+                        style={[
+                          styles.optionBadge,
+                          cls.isUnlocked ? styles.optionBadgeUnlocked : styles.optionBadgeLocked,
+                        ]}
+                      >
+                        <Text
+                          style={[
+                            styles.optionBadgeText,
+                            cls.isUnlocked ? styles.optionBadgeTextUnlocked : styles.optionBadgeTextLocked,
+                          ]}
+                        >
+                          {cls.isUnlocked ? 'SEÇİLİ' : 'KİLİTLİ'}
+                        </Text>
+                      </View>
+                    </View>
+
+                    <Text style={styles.optionSubtitle}>{cls.subtitle}</Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+
+            <View style={styles.modalFooterHint}>
+              <Ionicons name="information-circle-outline" size={12} color={COLORS.neonAmber} />
+              <Text style={styles.modalFooterHintText}>
+                Üst sınıflar, 1. Sınıf mühendislik müfredatındaki tüm arıza modülleri çözüldüğünde açılacaktır.
+              </Text>
+            </View>
+          </View>
+        </TouchableOpacity>
+      </Modal>
+
+      {/* 2. Sağ Modal: Görev / Arıza Seçici */}
+      <Modal
+        visible={taskModalVisible}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setTaskModalVisible(false)}
+      >
+        <TouchableOpacity
+          style={styles.modalBackdrop}
+          activeOpacity={1}
+          onPress={() => setTaskModalVisible(false)}
+        >
+          <View
+            style={styles.modalCard}
+            onStartShouldSetResponder={() => true}
+          >
+            <View style={styles.modalHeader}>
+              <View style={styles.modalHeaderTitleRow}>
+                <Ionicons name="hardware-chip-outline" size={16} color={COLORS.neonAmberBright} />
+                <Text style={styles.modalHeaderTitle}>GÖREV // ARIZALI CİHAZ SEÇİN</Text>
+              </View>
+              <TouchableOpacity onPress={() => setTaskModalVisible(false)}>
+                <Ionicons name="close-circle-outline" size={20} color={COLORS.textMuted} />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView style={styles.modalList} showsVerticalScrollIndicator={false}>
+              {data.availableModules.map((m, index) => {
+                const isSelected = m.id === activeMod.id;
+                const isCompleted = m.isCompleted;
+
+                return (
+                  <TouchableOpacity
+                    key={m.id}
+                    style={[
+                      styles.modalOptionCard,
+                      styles.modalOptionUnlocked,
+                      isSelected && styles.modalOptionActiveTask,
+                    ]}
+                    onPress={() => {
+                      onSelectModule(m.id);
+                      setTaskModalVisible(false);
+                    }}
+                    activeOpacity={0.8}
+                  >
+                    <View style={styles.optionTopRow}>
+                      <View style={styles.optionTitleRow}>
+                        <View style={[styles.taskIndexBadge, isSelected && styles.taskIndexBadgeActive]}>
+                          <Text style={[styles.taskIndexText, isSelected && styles.taskIndexTextActive]}>
+                            {index + 1}
+                          </Text>
+                        </View>
+                        <Text
+                          style={[
+                            styles.optionTitle,
+                            isSelected ? styles.optionTitleActiveTask : styles.optionTitleUnlocked,
+                          ]}
+                          numberOfLines={1}
+                        >
+                          {m.title}
+                        </Text>
+                      </View>
+
+                      <View
+                        style={[
+                          styles.optionBadge,
+                          isCompleted ? styles.taskBadgeCompleted : styles.taskBadgeActiveJob,
+                        ]}
+                      >
+                        <Text
+                          style={[
+                            styles.optionBadgeText,
+                            isCompleted ? styles.taskBadgeTextCompleted : styles.taskBadgeTextActiveJob,
+                          ]}
+                        >
+                          {isCompleted ? '✓ ONARILDI' : '⚡ AKTİF GÖREV'}
+                        </Text>
+                      </View>
+                    </View>
+
+                    <Text style={styles.optionSubtitle}>
+                      {isCompleted
+                        ? 'Bu cihaz başarıyla onarıldı. Tezgâhta kaynak kodunu ve yama geçmişini inceleyebilirsiniz.'
+                        : 'Atölye müşterisinden teslim alınan aktif onarım görevi. Hatalı C kodunu giderin.'}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+
+            <View style={styles.modalFooterHint}>
+              <Ionicons name="information-circle-outline" size={12} color={COLORS.neonCyan} />
+              <Text style={styles.modalFooterHintText}>
+                Yalnızca Atölye'den kabul edilen aktif görev ve daha önce tamamlanan eski işler listelenir.
+              </Text>
+            </View>
+          </View>
+        </TouchableOpacity>
+      </Modal>
     </ScrollView>
   );
 };
@@ -419,71 +651,233 @@ const styles = StyleSheet.create({
     gap: 12,
     paddingBottom: 28,
   },
-  moduleSwitcherCard: {
-    backgroundColor: COLORS.bgCard,
-    borderRadius: 12,
-    padding: 10,
-    borderWidth: 1,
-    borderColor: COLORS.borderGlass,
+  dropdownContainer: {
+    flexDirection: 'row',
     gap: 8,
+    width: '100%',
   },
-  moduleSwitcherHeader: {
+  dropdownButton: {
+    flex: 1,
+    backgroundColor: COLORS.bgCard,
+    borderWidth: 1.2,
+    borderColor: COLORS.borderGlass,
+    borderRadius: 12,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    gap: 4,
+  },
+  dropdownButtonTask: {
+    borderColor: 'rgba(245, 158, 11, 0.4)',
+    backgroundColor: 'rgba(245, 158, 11, 0.05)',
+  },
+  dropdownTopRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    gap: 5,
   },
-  moduleSwitcherTitle: {
-    color: COLORS.neonCyanBright,
-    fontSize: 10,
+  dropdownCategory: {
+    fontSize: 9,
+    fontWeight: '800',
+    color: COLORS.textMuted,
+    letterSpacing: 0.5,
+  },
+  dropdownValueRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 4,
+  },
+  dropdownValueText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: COLORS.textPrimary,
+    flex: 1,
+  },
+  dropdownValueTextTask: {
+    color: COLORS.neonAmberBright,
+    fontWeight: '800',
+  },
+  modalBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(2, 6, 18, 0.82)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 16,
+  },
+  modalCard: {
+    width: '100%',
+    maxWidth: 420,
+    maxHeight: '80%',
+    backgroundColor: '#0a0f1d',
+    borderWidth: 1.5,
+    borderColor: COLORS.borderGold,
+    borderRadius: 16,
+    padding: 16,
+    gap: 12,
+    shadowColor: COLORS.neonAmber,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.35,
+    shadowRadius: 14,
+    elevation: 10,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255, 255, 255, 0.08)',
+    paddingBottom: 10,
+  },
+  modalHeaderTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  modalHeaderTitle: {
+    color: COLORS.neonAmberBright,
+    fontSize: 12,
     fontWeight: '800',
     letterSpacing: 0.5,
   },
-  modulePillScroll: {
-    flexDirection: 'row',
+  modalList: {
+    flexGrow: 0,
   },
-  modulePill: {
+  modalOptionCard: {
+    borderRadius: 10,
+    borderWidth: 1,
+    padding: 10,
+    gap: 4,
+    marginBottom: 8,
+  },
+  modalOptionUnlocked: {
+    backgroundColor: 'rgba(255, 255, 255, 0.03)',
+    borderColor: COLORS.borderDark,
+  },
+  modalOptionLocked: {
+    backgroundColor: 'rgba(0, 0, 0, 0.3)',
+    borderColor: 'rgba(255, 255, 255, 0.05)',
+    opacity: 0.55,
+  },
+  modalOptionActive: {
+    borderColor: COLORS.neonCyanBright,
+    backgroundColor: 'rgba(6, 182, 212, 0.12)',
+  },
+  modalOptionActiveTask: {
+    borderColor: COLORS.neonAmberBright,
+    backgroundColor: 'rgba(245, 158, 11, 0.12)',
+  },
+  optionTopRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    gap: 8,
+  },
+  optionTitleRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-    backgroundColor: 'rgba(255, 255, 255, 0.04)',
-    borderWidth: 1,
-    borderColor: COLORS.borderDark,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 8,
-    marginRight: 8,
+    gap: 8,
+    flex: 1,
   },
-  modulePillActive: {
+  optionTitle: {
+    fontSize: 11.5,
+    fontWeight: '700',
+    flex: 1,
+  },
+  optionTitleActive: {
+    color: COLORS.neonCyanBright,
+    fontWeight: '800',
+  },
+  optionTitleActiveTask: {
+    color: COLORS.neonAmberBright,
+    fontWeight: '800',
+  },
+  optionTitleUnlocked: {
+    color: COLORS.textPrimary,
+  },
+  optionTitleLocked: {
+    color: COLORS.textMuted,
+  },
+  optionBadge: {
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: 6,
+    borderWidth: 1,
+  },
+  optionBadgeUnlocked: {
     backgroundColor: 'rgba(6, 182, 212, 0.15)',
     borderColor: COLORS.neonCyanBright,
   },
-  modulePillCompleted: {
-    borderColor: 'rgba(16, 185, 129, 0.4)',
+  optionBadgeLocked: {
+    backgroundColor: 'rgba(255, 255, 255, 0.04)',
+    borderColor: COLORS.borderDark,
   },
-  pillIndexBadge: {
-    width: 16,
-    height: 16,
-    borderRadius: 8,
+  optionBadgeText: {
+    fontSize: 9,
+    fontWeight: '800',
+  },
+  optionBadgeTextUnlocked: {
+    color: COLORS.neonCyanBright,
+  },
+  optionBadgeTextLocked: {
+    color: COLORS.textMuted,
+  },
+  taskBadgeCompleted: {
+    backgroundColor: 'rgba(16, 185, 129, 0.15)',
+    borderColor: COLORS.neonGreenBright,
+  },
+  taskBadgeActiveJob: {
+    backgroundColor: 'rgba(245, 158, 11, 0.18)',
+    borderColor: COLORS.neonAmberBright,
+  },
+  taskBadgeTextCompleted: {
+    color: COLORS.neonGreenBright,
+    fontWeight: '800',
+  },
+  taskBadgeTextActiveJob: {
+    color: COLORS.neonAmberBright,
+    fontWeight: '800',
+  },
+  taskIndexBadge: {
+    width: 18,
+    height: 18,
+    borderRadius: 9,
     backgroundColor: 'rgba(255, 255, 255, 0.08)',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  pillIndexText: {
+  taskIndexBadgeActive: {
+    backgroundColor: COLORS.neonAmberBright,
+  },
+  taskIndexText: {
     color: COLORS.textSecondary,
-    fontSize: 9,
+    fontSize: 9.5,
     fontWeight: '700',
   },
-  modulePillText: {
+  taskIndexTextActive: {
+    color: COLORS.bgPrimary,
+    fontWeight: '900',
+  },
+  optionSubtitle: {
     color: COLORS.textSecondary,
-    fontSize: 11,
-    fontWeight: '600',
+    fontSize: 10,
+    lineHeight: 14,
+    paddingLeft: 26,
   },
-  modulePillTextActive: {
-    color: COLORS.neonCyanBright,
-    fontWeight: '700',
+  modalFooterHint: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: 'rgba(255, 255, 255, 0.03)',
+    padding: 8,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.06)',
   },
-  modulePillTextCompleted: {
-    color: COLORS.neonGreenBright,
+  modalFooterHintText: {
+    color: COLORS.textMuted,
+    fontSize: 9.5,
+    flex: 1,
+    lineHeight: 13,
   },
   telemetryCard: {
     backgroundColor: COLORS.bgCard,

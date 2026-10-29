@@ -9,6 +9,7 @@ import { CURRICULUM_MODULES, MODULE_ORDER } from '../data/curriculumModules';
 interface InternalState {
   activeTab: TabType;
   activeModuleId: ModuleId;
+  currentWorkshopModuleId: ModuleId;
   completedModuleIds: ModuleId[];
   gold: number;
   exp: number;
@@ -20,9 +21,6 @@ interface InternalState {
   hardwareVoltage: number;
   terminalLogs: string[];
   lastTestSuccess?: boolean;
-  selectedConversationOption: Record<string, string>;
-  customConversationInput: Record<string, string>;
-  showCustomInput: Record<string, boolean>;
   purchasedShopItems: string[];
 }
 
@@ -73,6 +71,7 @@ class SDUIEngineService {
     this.state = {
       activeTab: 'workshop',
       activeModuleId: 'module_1_loops',
+      currentWorkshopModuleId: 'module_1_loops',
       completedModuleIds: [],
       gold: 150,
       exp: 20,
@@ -90,14 +89,6 @@ class SDUIEngineService {
         'İpucu: Tezgâhta arızalı C kodunu inceleyip uygun yamayı seçin.',
       ],
       lastTestSuccess: undefined,
-      selectedConversationOption: {
-        module_1_loops: 'Közlenmiş Atölye Kahvesi',
-        module_2_memory: 'Közde Buhar Kahvesi',
-        module_3_structs: 'Kavrulmuş Arpa Kahvesi',
-        module_4_testing: 'Bent Kulesi Buhar Kahvesi',
-      },
-      customConversationInput: {},
-      showCustomInput: {},
       purchasedShopItems: [],
     };
   }
@@ -234,31 +225,14 @@ class SDUIEngineService {
   }
 
   public advanceToNextModule(): void {
-    const currentIndex = MODULE_ORDER.indexOf(this.state.activeModuleId);
+    const currentIndex = MODULE_ORDER.indexOf(this.state.currentWorkshopModuleId);
     if (currentIndex >= 0 && currentIndex < MODULE_ORDER.length - 1) {
       const nextId = MODULE_ORDER[currentIndex + 1];
+      this.state.currentWorkshopModuleId = nextId;
       this.selectModule(nextId);
       this.state.activeTab = 'workshop';
       this.notify();
     }
-  }
-
-  public setConversationOption(option: string): void {
-    const modId = this.state.activeModuleId;
-    if (option === 'Diğer...') {
-      this.state.selectedConversationOption[modId] = 'Diğer...';
-      this.state.showCustomInput[modId] = true;
-    } else {
-      this.state.selectedConversationOption[modId] = option;
-      this.state.showCustomInput[modId] = false;
-    }
-    this.notify();
-  }
-
-  public setCustomConversationInput(text: string): void {
-    const modId = this.state.activeModuleId;
-    this.state.customConversationInput[modId] = text;
-    this.notify();
   }
 
   public buyShopItem(itemId: string): boolean {
@@ -297,31 +271,37 @@ class SDUIEngineService {
       academicProgress: `1. Sınıf İlerlemesi: ${completedCount}/${totalModules} Modül Onaylandı`,
     };
 
-    // Workshop State
-    const teaConfig = currentBundle.teaConversation;
-    const currentModId = this.state.activeModuleId;
+    // Workshop State: Her zaman aktif atölye görevine (currentWorkshopModuleId) bağlı kalır
+    const workshopModId = this.state.currentWorkshopModuleId;
+    const workshopBundle = CURRICULUM_MODULES[workshopModId];
+    const currentIndex = MODULE_ORDER.indexOf(workshopModId);
+    const hasNextModule = currentIndex >= 0 && currentIndex < MODULE_ORDER.length - 1;
+
     const workshopState = {
-      customer: currentBundle.customer,
+      customer: workshopBundle.customer,
       jobStatus: this.state.jobStatus,
-      activeModuleId: currentModId,
-      conversation: {
-        isUnlocked: this.state.jobStatus === 'DELIVERED',
-        prompt: teaConfig.prompt,
-        options: teaConfig.options,
-        selectedOption: this.state.selectedConversationOption[currentModId] || teaConfig.defaultOption,
-        customInput: this.state.customConversationInput[currentModId] || '',
-        showCustomInput: !!this.state.showCustomInput[currentModId],
+      activeModuleId: workshopModId,
+      rewardReport: {
+        gold: workshopBundle.moduleData.rewardGold,
+        exp: workshopBundle.moduleData.rewardExp,
+        deviceName: workshopBundle.moduleData.deviceName,
+        deviceCode: workshopBundle.moduleData.deviceCode,
+        statusText: 'Stabil // Saha Testinde',
       },
+      hasNextModule,
     };
 
-    // Available modules navigation list for Workbench
-    const availableModules = MODULE_ORDER.map((id) => {
+    // Tezgâh Görev Listesi: YALNIZCA tamamlanan görevler ve mevcut aktif görev gösterilir!
+    // Gelecekteki işler listede KESİNLİKLE görünmez.
+    const unlockedLimit = MODULE_ORDER.indexOf(this.state.currentWorkshopModuleId);
+    const availableModules = MODULE_ORDER.slice(0, unlockedLimit + 1).map((id) => {
       const b = CURRICULUM_MODULES[id];
       return {
         id,
         title: b.moduleData.deviceName,
         isCompleted: this.state.completedModuleIds.includes(id),
         isCurrent: id === this.state.activeModuleId,
+        isActiveWorkshopJob: id === this.state.currentWorkshopModuleId,
       };
     });
 

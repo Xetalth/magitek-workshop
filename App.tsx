@@ -57,14 +57,6 @@ export default function App() {
     sduiEngine.advanceToNextModule();
   };
 
-  const handleSelectOption = (option: string) => {
-    sduiEngine.setConversationOption(option);
-  };
-
-  const handleSaveCustomOption = (text: string) => {
-    sduiEngine.setCustomConversationInput(text);
-  };
-
   const handleBuyShopItem = (itemId: string) => {
     sduiEngine.buyShopItem(itemId);
   };
@@ -79,8 +71,6 @@ export default function App() {
             onGoToWorkbench={handleGoToWorkbench}
             onSelectModule={handleSelectModule}
             onNextModule={handleNextModule}
-            onSelectOption={handleSelectOption}
-            onSaveCustomOption={handleSaveCustomOption}
           />
         );
       case 'workbench':

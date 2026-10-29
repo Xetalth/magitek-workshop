@@ -56,7 +56,13 @@ export interface WorkbenchModuleData {
 
 export interface WorkbenchState {
   activeModule: WorkbenchModuleData;
-  availableModules: { id: ModuleId; title: string; isCompleted: boolean; isCurrent: boolean }[];
+  availableModules: {
+    id: ModuleId;
+    title: string;
+    isCompleted: boolean;
+    isCurrent: boolean;
+    isActiveWorkshopJob?: boolean;
+  }[];
   selectedPatchId: string | null;
   inspectionStatus: 'ANALYZING' | 'TESTING' | 'REPAIRED' | 'OVERHEATING_FAILED';
   hasPendingWork: boolean;
@@ -70,18 +76,20 @@ export interface WorkbenchState {
   lastTestSuccess?: boolean;
 }
 
+export interface TaskRewardReport {
+  gold: number;
+  exp: number;
+  deviceName: string;
+  deviceCode: string;
+  statusText: string;
+}
+
 export interface WorkshopState {
   customer: CustomerIssue;
   jobStatus: 'AVAILABLE' | 'IN_WORKBENCH' | 'READY_TO_DELIVER' | 'DELIVERED';
   activeModuleId: ModuleId;
-  conversation: {
-    isUnlocked: boolean;
-    prompt: string;
-    options: string[];
-    selectedOption: string;
-    customInput: string;
-    showCustomInput: boolean;
-  };
+  rewardReport: TaskRewardReport;
+  hasNextModule: boolean;
 }
 
 export interface SkillNode {

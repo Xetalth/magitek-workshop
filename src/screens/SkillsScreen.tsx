@@ -69,7 +69,6 @@ export const SkillsScreen: React.FC<SkillsScreenProps> = ({ data }) => {
                       styles.nodeName,
                       isUnlocked ? styles.nameUnlocked : styles.nameLocked,
                     ]}
-                    numberOfLines={1}
                   >
                     {node.name}
                   </Text>
@@ -168,6 +167,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'flex-start',
     gap: 10,
+    width: '100%',
   },
   timelineCol: {
     alignItems: 'center',
@@ -202,12 +202,14 @@ const styles = StyleSheet.create({
   },
   nodeCard: {
     flex: 1,
+    flexShrink: 1,
     backgroundColor: COLORS.bgCard,
     borderRadius: 12,
     padding: 12,
     borderWidth: 1,
     gap: 6,
     marginBottom: 10,
+    overflow: 'hidden',
   },
   cardUnlocked: {
     borderColor: 'rgba(16, 185, 129, 0.35)',
@@ -224,14 +226,17 @@ const styles = StyleSheet.create({
   nodeCardHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     flexWrap: 'wrap',
     gap: 6,
+    width: '100%',
   },
   nodeName: {
     fontSize: 12.5,
     fontWeight: '800',
+    flex: 1,
     flexShrink: 1,
+    flexWrap: 'wrap',
   },
   nameUnlocked: {
     color: COLORS.textPrimary,
@@ -244,6 +249,8 @@ const styles = StyleSheet.create({
     paddingVertical: 2,
     borderRadius: 6,
     borderWidth: 1,
+    flexShrink: 0,
+    alignSelf: 'flex-start',
   },
   tierBadgeUnlocked: {
     backgroundColor: 'rgba(16, 185, 129, 0.12)',
@@ -266,11 +273,13 @@ const styles = StyleSheet.create({
   creditRow: {
     flexDirection: 'row',
     alignItems: 'center',
+    flexWrap: 'wrap',
     gap: 4,
     backgroundColor: 'rgba(0,0,0,0.25)',
     paddingHorizontal: 6,
-    paddingVertical: 2,
+    paddingVertical: 3,
     borderRadius: 4,
+    maxWidth: '100%',
     alignSelf: 'flex-start',
   },
   creditText: {
@@ -278,15 +287,20 @@ const styles = StyleSheet.create({
     fontSize: 9.5,
     fontWeight: '700',
     fontFamily: 'monospace',
+    flexShrink: 0,
   },
   topicText: {
     color: COLORS.textMuted,
     fontSize: 9.5,
+    flexShrink: 1,
+    flexWrap: 'wrap',
   },
   nodeDescription: {
     color: COLORS.textSecondary,
     fontSize: 11,
     lineHeight: 16,
+    flexShrink: 1,
+    flexWrap: 'wrap',
   },
   nodeStatusRow: {
     flexDirection: 'row',
@@ -296,10 +310,12 @@ const styles = StyleSheet.create({
     paddingTop: 6,
     borderTopWidth: 1,
     borderTopColor: 'rgba(255, 255, 255, 0.04)',
+    flexWrap: 'wrap',
   },
   nodeStatusText: {
     fontSize: 10,
     fontWeight: '600',
+    flexShrink: 1,
   },
   statusUnlockedText: {
     color: COLORS.neonGreenBright,

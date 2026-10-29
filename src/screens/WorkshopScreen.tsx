@@ -1,10 +1,9 @@
-import React, { useState } from 'react';
+import React from 'react';
 import {
   View,
   Text,
   StyleSheet,
   TouchableOpacity,
-  TextInput,
   ImageBackground,
   Image,
   ScrollView,
@@ -20,35 +19,20 @@ interface WorkshopScreenProps {
   data: WorkshopState;
   onDeliverJob: () => void;
   onGoToWorkbench: () => void;
-  onSelectModule: (moduleId: ModuleId) => void;
+  onSelectModule?: (moduleId: ModuleId) => void;
   onNextModule: () => void;
-  onSelectOption: (option: string) => void;
-  onSaveCustomOption: (text: string) => void;
 }
 
 export const WorkshopScreen: React.FC<WorkshopScreenProps> = ({
   data,
   onDeliverJob,
   onGoToWorkbench,
-  onSelectModule,
   onNextModule,
-  onSelectOption,
-  onSaveCustomOption,
 }) => {
-  const [customText, setCustomText] = useState(data.conversation.customInput);
-
   const isDelivered = data.jobStatus === 'DELIVERED';
   const isReadyToDeliver = data.jobStatus === 'READY_TO_DELIVER';
-
-  const handleOptionPress = (option: string) => {
-    onSelectOption(option);
-  };
-
-  const handleSaveCustom = () => {
-    if (customText.trim()) {
-      onSaveCustomOption(customText.trim());
-    }
-  };
+  const reward = data.rewardReport;
+  const hasNext = data.hasNextModule;
 
   return (
     <ImageBackground source={workshopBg} style={styles.backgroundImage} resizeMode="cover">
@@ -112,19 +96,27 @@ export const WorkshopScreen: React.FC<WorkshopScreenProps> = ({
 
                 {/* Donanım Belirtisi Kutucuğu */}
                 <View style={styles.symptomBox}>
-                  <Ionicons name="alert-circle-outline" size={13} color={COLORS.neonCyanBright} />
+                  <Ionicons
+                    name={isDelivered ? 'checkmark-circle-outline' : 'alert-circle-outline'}
+                    size={13}
+                    color={isDelivered ? COLORS.neonGreenBright : COLORS.neonCyanBright}
+                  />
                   <Text style={styles.symptomText} numberOfLines={2}>
-                    <Text style={styles.symptomLabel}>Belirti: </Text>
-                    {data.customer.physicalSymptom}
+                    <Text style={isDelivered ? styles.symptomLabelSuccess : styles.symptomLabel}>
+                      {isDelivered ? 'Durum: ' : 'Belirti: '}
+                    </Text>
+                    {isDelivered
+                      ? `${reward.deviceName} başarıyla teslim edildi. Donanım nominal çalışma modunda.`
+                      : data.customer.physicalSymptom}
                   </Text>
                 </View>
               </View>
             </View>
 
-            {/* Aksiyon Butonları */}
-            <View style={styles.actionRow}>
-              {/* Tezgâha Git Butonu */}
-              {!isDelivered && (
+            {/* Aksiyon Butonları (Teslim edilmemişken) */}
+            {!isDelivered && (
+              <View style={styles.actionRow}>
+                {/* Tezgâha Git Butonu */}
                 <TouchableOpacity
                   style={styles.workbenchButton}
                   onPress={onGoToWorkbench}
@@ -133,81 +125,92 @@ export const WorkshopScreen: React.FC<WorkshopScreenProps> = ({
                   <Ionicons name="hammer-outline" size={16} color={COLORS.bgPrimary} />
                   <Text style={styles.workbenchButtonText}>Tezgâha Git & Kodu İncele</Text>
                 </TouchableOpacity>
-              )}
 
-              {/* Teslim Et Butonu */}
-              {isReadyToDeliver && !isDelivered && (
-                <TouchableOpacity
-                  style={styles.deliverButton}
-                  onPress={onDeliverJob}
-                  activeOpacity={0.8}
-                >
-                  <Ionicons name="checkmark-done-circle" size={18} color={COLORS.bgPrimary} />
-                  <Text style={styles.deliverButtonText}>Onarılan Cihazı Teslim Et</Text>
-                </TouchableOpacity>
-              )}
-
-              {/* Sıradaki Modüle Geç Butonu */}
-              {isDelivered && (
-                <TouchableOpacity
-                  style={styles.nextModuleButton}
-                  onPress={onNextModule}
-                  activeOpacity={0.8}
-                >
-                  <Ionicons name="arrow-forward-circle" size={18} color={COLORS.bgPrimary} />
-                  <Text style={styles.nextModuleButtonText}>Sıradaki 1. Sınıf Modülüne İlerle</Text>
-                </TouchableOpacity>
-              )}
-            </View>
-
-            {/* Teslimat Sonrası Organik Çay / Kahve Sohbeti */}
-            {data.conversation.isUnlocked && (
-              <View style={styles.musicSection}>
-                <View style={styles.musicHeader}>
-                  <Ionicons name="cafe-outline" size={14} color={COLORS.neonAmberBright} />
-                  <Text style={styles.musicTitle}>Mekanik Atölye Sohbeti & Buhar Molası</Text>
-                </View>
-
-                <Text style={styles.musicPrompt}>"{data.conversation.prompt}"</Text>
-
-                <View style={styles.chipsContainer}>
-                  {data.conversation.options.map((option) => {
-                    const isSelected = data.conversation.selectedOption === option;
-                    return (
-                      <TouchableOpacity
-                        key={option}
-                        style={[styles.chip, isSelected && styles.chipSelected]}
-                        onPress={() => handleOptionPress(option)}
-                        activeOpacity={0.7}
-                      >
-                        <Text style={[styles.chipText, isSelected && styles.chipTextSelected]}>
-                          {option}
-                        </Text>
-                      </TouchableOpacity>
-                    );
-                  })}
-                </View>
-
-                {data.conversation.showCustomInput && (
-                  <View style={styles.customInputContainer}>
-                    <TextInput
-                      style={styles.customTextInput}
-                      placeholder="Örn: Kavrulmuş kahve, dağ infüzyonu..."
-                      placeholderTextColor={COLORS.textMuted}
-                      value={customText}
-                      onChangeText={setCustomText}
-                      onSubmitEditing={handleSaveCustom}
-                      returnKeyType="done"
-                    />
-                    <TouchableOpacity
-                      style={styles.saveInputButton}
-                      onPress={handleSaveCustom}
-                      activeOpacity={0.8}
-                    >
-                      <Text style={styles.saveInputButtonText}>Kaydet</Text>
-                    </TouchableOpacity>
-                  </View>
+                {/* Teslim Et Butonu */}
+                {isReadyToDeliver && (
+                  <TouchableOpacity
+                    style={styles.deliverButton}
+                    onPress={onDeliverJob}
+                    activeOpacity={0.8}
+                  >
+                    <Ionicons name="checkmark-done-circle" size={18} color={COLORS.bgPrimary} />
+                    <Text style={styles.deliverButtonText}>Onarılan Cihazı Teslim Et</Text>
+                  </TouchableOpacity>
                 )}
+              </View>
+            )}
+
+            {/* Teslimat Sonrası: Mühendislik Ödül ve Kazanç Paneli */}
+            {isDelivered && (
+              <View style={styles.rewardPanel}>
+                {/* Panel Başlığı */}
+                <View style={styles.rewardHeader}>
+                  <View style={styles.rewardHeaderLeft}>
+                    <Ionicons name="clipboard-outline" size={15} color={COLORS.neonAmberBright} />
+                    <Text style={styles.rewardHeaderTitle}>GÖREV RAPORU & MÜHENDİSLİK TELEMETRİSİ</Text>
+                  </View>
+                  <View style={styles.rewardApprovedBadge}>
+                    <Ionicons name="checkmark-sharp" size={11} color={COLORS.neonGreenBright} />
+                    <Text style={styles.rewardApprovedText}>ONAYLANDI</Text>
+                  </View>
+                </View>
+
+                {/* Kazanç İstatistikleri */}
+                <View style={styles.rewardMetricsGrid}>
+                  {/* Altın Kartı */}
+                  <View style={styles.metricCard}>
+                    <View style={styles.metricIconCircleGold}>
+                      <Text style={styles.coinIcon}>🪙</Text>
+                    </View>
+                    <View style={styles.metricInfo}>
+                      <Text style={styles.metricLabel}>Kazanılan Altın</Text>
+                      <Text style={styles.metricValueGold}>+{reward.gold} G</Text>
+                    </View>
+                  </View>
+
+                  {/* Tecrübe Puanı Kartı */}
+                  <View style={styles.metricCard}>
+                    <View style={styles.metricIconCircleExp}>
+                      <Ionicons name="flash" size={15} color={COLORS.neonCyanBright} />
+                    </View>
+                    <View style={styles.metricInfo}>
+                      <Text style={styles.metricLabel}>Tecrübe Puanı</Text>
+                      <Text style={styles.metricValueExp}>+{reward.exp} EXP</Text>
+                    </View>
+                  </View>
+                </View>
+
+                {/* Onarılan Donanım Telemetrisi */}
+                <View style={styles.telemetryStatusBox}>
+                  <Ionicons name="hardware-chip-outline" size={16} color={COLORS.neonAmberBright} />
+                  <View style={styles.telemetryStatusContent}>
+                    <Text style={styles.telemetryDeviceTitle} numberOfLines={1}>
+                      {reward.deviceName}
+                    </Text>
+                    <Text style={styles.telemetryStatusDesc}>
+                      Durum:{' '}
+                      <Text style={styles.telemetryStatusHighlight}>{reward.statusText}</Text>
+                    </Text>
+                  </View>
+                </View>
+
+                {/* Tek Ana Eylem Butonu */}
+                <TouchableOpacity
+                  style={styles.nextTaskButton}
+                  onPress={hasNext ? onNextModule : onGoToWorkbench}
+                  activeOpacity={0.8}
+                >
+                  <Text style={styles.nextTaskButtonText}>
+                    {hasNext
+                      ? '➔ Sıradaki Mühendislik Görevine İlerle'
+                      : '➔ 1. Sınıf Müfredatı Tamamlandı (Tezgâha Git)'}
+                  </Text>
+                  <Ionicons
+                    name={hasNext ? 'arrow-forward-circle' : 'hammer'}
+                    size={18}
+                    color={COLORS.bgPrimary}
+                  />
+                </TouchableOpacity>
               </View>
             )}
           </View>
@@ -228,7 +231,7 @@ const styles = StyleSheet.create({
     minHeight: 50,
   },
   dialogContainer: {
-    maxHeight: '75%',
+    maxHeight: '80%',
     paddingHorizontal: 12,
     paddingBottom: 10,
   },
@@ -363,6 +366,11 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     fontSize: 10,
   },
+  symptomLabelSuccess: {
+    color: COLORS.neonGreenBright,
+    fontWeight: '700',
+    fontSize: 10,
+  },
   symptomText: {
     color: COLORS.textSecondary,
     fontSize: 10,
@@ -402,95 +410,156 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '800',
   },
-  nextModuleButton: {
+  rewardPanel: {
+    backgroundColor: 'rgba(10, 15, 29, 0.95)',
+    borderRadius: 14,
+    borderWidth: 1.5,
+    borderColor: COLORS.borderGold,
+    padding: 10,
+    gap: 8,
+    marginTop: 4,
+    shadowColor: COLORS.neonAmber,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  rewardHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255, 255, 255, 0.08)',
+    paddingBottom: 6,
+  },
+  rewardHeaderLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    flex: 1,
+  },
+  rewardHeaderTitle: {
+    color: COLORS.neonAmberBright,
+    fontSize: 10,
+    fontWeight: '800',
+    letterSpacing: 0.4,
+  },
+  rewardApprovedBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    backgroundColor: 'rgba(16, 185, 129, 0.15)',
+    borderWidth: 1,
+    borderColor: COLORS.neonGreenBright,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+  },
+  rewardApprovedText: {
+    color: COLORS.neonGreenBright,
+    fontSize: 8.5,
+    fontWeight: '800',
+  },
+  rewardMetricsGrid: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  metricCard: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: 'rgba(255, 255, 255, 0.04)',
+    borderWidth: 1,
+    borderColor: COLORS.borderDark,
+    borderRadius: 8,
+    padding: 6,
+  },
+  metricIconCircleGold: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: 'rgba(245, 158, 11, 0.15)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  metricIconCircleExp: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: 'rgba(6, 182, 212, 0.15)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  coinIcon: {
+    fontSize: 13,
+  },
+  metricInfo: {
+    flex: 1,
+  },
+  metricLabel: {
+    color: COLORS.textMuted,
+    fontSize: 9,
+    fontWeight: '600',
+  },
+  metricValueGold: {
+    color: COLORS.neonAmberBright,
+    fontSize: 12,
+    fontWeight: '800',
+    fontFamily: 'monospace',
+  },
+  metricValueExp: {
+    color: COLORS.neonCyanBright,
+    fontSize: 12,
+    fontWeight: '800',
+    fontFamily: 'monospace',
+  },
+  telemetryStatusBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: 'rgba(0, 0, 0, 0.35)',
+    borderWidth: 1,
+    borderColor: 'rgba(245, 158, 11, 0.25)',
+    borderRadius: 8,
+    padding: 7,
+  },
+  telemetryStatusContent: {
+    flex: 1,
+  },
+  telemetryDeviceTitle: {
+    color: COLORS.textPrimary,
+    fontSize: 10.5,
+    fontWeight: '700',
+  },
+  telemetryStatusDesc: {
+    color: COLORS.textMuted,
+    fontSize: 9.5,
+    marginTop: 1,
+  },
+  telemetryStatusHighlight: {
+    color: COLORS.neonGreenBright,
+    fontWeight: '700',
+  },
+  nextTaskButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 6,
+    gap: 8,
     backgroundColor: COLORS.neonAmberBright,
-    paddingVertical: 9,
+    paddingVertical: 10,
     borderRadius: 10,
-  },
-  nextModuleButtonText: {
-    color: COLORS.bgPrimary,
-    fontSize: 12,
-    fontWeight: '800',
-  },
-  musicSection: {
-    backgroundColor: 'rgba(15, 23, 42, 0.85)',
-    borderRadius: 12,
-    padding: 9,
-    borderWidth: 1,
-    borderColor: COLORS.borderGold,
-    gap: 6,
+    shadowColor: COLORS.neonAmber,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 6,
+    elevation: 4,
     marginTop: 2,
   },
-  musicHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-  },
-  musicTitle: {
-    color: COLORS.neonAmberBright,
-    fontSize: 10.5,
-    fontWeight: '700',
-  },
-  musicPrompt: {
-    color: COLORS.textPrimary,
-    fontSize: 10.5,
-    fontStyle: 'italic',
-    lineHeight: 15,
-  },
-  chipsContainer: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 5,
-  },
-  chip: {
-    backgroundColor: 'rgba(255, 255, 255, 0.05)',
-    borderWidth: 1,
-    borderColor: COLORS.borderDark,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 12,
-  },
-  chipSelected: {
-    backgroundColor: 'rgba(245, 158, 11, 0.18)',
-    borderColor: COLORS.neonAmberBright,
-  },
-  chipText: {
-    color: COLORS.textSecondary,
-    fontSize: 9.5,
-  },
-  chipTextSelected: {
-    color: COLORS.neonAmberBright,
-    fontWeight: '700',
-  },
-  customInputContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: COLORS.bgTerminal,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: COLORS.neonCyan,
-    overflow: 'hidden',
-    marginTop: 2,
-  },
-  customTextInput: {
-    flex: 1,
-    color: COLORS.textPrimary,
-    fontSize: 10.5,
-    paddingVertical: 5,
-    paddingHorizontal: 8,
-  },
-  saveInputButton: {
-    backgroundColor: COLORS.neonCyan,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-  },
-  saveInputButtonText: {
+  nextTaskButtonText: {
     color: COLORS.bgPrimary,
-    fontSize: 9.5,
+    fontSize: 11.5,
     fontWeight: '800',
+    letterSpacing: 0.2,
   },
 });

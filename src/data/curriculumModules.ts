@@ -5,12 +5,6 @@ export interface ModuleBundle {
   customer: CustomerIssue;
   skillNode: SkillNode;
   gadget: RoomGadget;
-  teaConversation: {
-    prompt: string;
-    options: string[];
-    defaultOption: string;
-    customPlaceholder: string;
-  };
 }
 
 export const CURRICULUM_MODULES: Record<string, ModuleBundle> = {
@@ -149,12 +143,6 @@ void process_wheel_revolution(uint16_t current_rpm) {
       icon: 'speedometer-outline',
       description: 'Hidrolik çarkın devir hızını milisaniyelik hassasiyetle analog kadranda gösteren kalibre edilmiş pirinç aparat.',
       hardwareSpec: '64-Pals Döner Kodlayıcı // 0..255 RPM Okuma',
-    },
-    teaConversation: {
-      prompt: 'Çark sayacını kurtardığın için teşekkürler mühendis! Çarkların ritmik sesi altında çalışırken buhar soğutma molasında ne alırsın?',
-      options: ['Közlenmiş Atölye Kahvesi', 'Buhar Soğutma Molası', 'Mekanik Lo-Fi Tınıları', 'Diğer...'],
-      defaultOption: 'Közlenmiş Atölye Kahvesi',
-      customPlaceholder: 'Örn: Kavrulmuş fındıklı kahve, ada adaçayı...',
     },
   },
 
@@ -313,12 +301,6 @@ void monitor_valve_pressure() {
       description: 'Mikrodenetleyicinin SRAM ve Heap segmentini canlı dalga formu ve yeşil fosforlu hex kodlarıyla izleyen analiz aygıtı.',
       hardwareSpec: 'Canlı SRAM Dökümü // 100 kHz Bant Genişliği',
     },
-    teaConversation: {
-      prompt: 'Buhar basınç valfi saat gibi çalışıyor mühendis! Kazanın ısısı düşmüşken istasyonun közde demlenen kahvesinden bir fincan doldurayım mı?',
-      options: ['Közde Buhar Kahvesi', 'Soğuk Piston Suyu', 'Çarkçı Bitki Çayı', 'Diğer...'],
-      defaultOption: 'Közde Buhar Kahvesi',
-      customPlaceholder: 'Örn: Tarçınlı kahve, maden suyu...',
-    },
   },
 
   module_3_structs: {
@@ -473,12 +455,6 @@ void write_grain_record(struct GrainPacket *pkt) {
       description: 'Duvarda sergilenen C bellek yerleşimi (Stack, Heap, BSS) şeması ve pirinç korumalı ambar envanter kartuşu.',
       hardwareSpec: '10-Byte Optimize Paket // 100K EEPROM Yazma Döngüsü',
     },
-    teaConversation: {
-      prompt: 'Kristal arşiv kütüğünü kurtardın, lojistik hattı güvende! Arşiv mola odasında demlenen kavrulmuş arpa kahvesine ne dersin?',
-      options: ['Kavrulmuş Arpa Kahvesi', 'Amber İnfüzyonu', 'Sert Makinist Espressosu', 'Diğer...'],
-      defaultOption: 'Kavrulmuş Arpa Kahvesi',
-      customPlaceholder: 'Örn: Kakuleli kahve, bergamotlu infüzyon...',
-    },
   },
 
   module_4_testing: {
@@ -630,12 +606,6 @@ void process_aqueduct_tick() {
       icon: 'shield-checkmark-outline',
       description: '1. Sınıf Yazılım Mühendisliği Tamamlama Plaketi ve tezgâhta parıldayan yeşil test doğrulama LED göstergesi.',
       hardwareSpec: 'Otomatik TDD Harness // Bütünleşik Assert Koşucusu',
-    },
-    teaConversation: {
-      prompt: 'Kanallar artık asla taşmıyor mühendis! Bent kulesinde demlediğimiz özel buhar kahvesinden bir kupa doldurayım mı?',
-      options: ['Bent Kulesi Buhar Kahvesi', 'Közde Demleme Kahve', 'Dağ Kekiği İnfüzyonu', 'Diğer...'],
-      defaultOption: 'Bent Kulesi Buhar Kahvesi',
-      customPlaceholder: 'Örn: Dağ kahvesi, buharlı espresso...',
     },
   },
 };
