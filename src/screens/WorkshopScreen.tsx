@@ -15,6 +15,17 @@ import { COLORS } from '../theme/colors';
 const workshopBg = require('../assets/images/workshop_bg.png');
 const npcImg = require('../assets/images/npc_halil.png');
 
+/**
+ * NPC portresi altındaki rozet metnini üstteki müşteri adı ve avatar ile senkronize eder
+ */
+const getCustomerBadgeText = (customer: { customerName: string; avatarKey: string }): string => {
+  if (customer.customerName.includes('Linus')) return 'LINUS';
+  if (customer.customerName.includes('Barnaby')) return 'BARNABY';
+  if (customer.customerName.includes('Vane')) return 'VANE';
+  if (customer.customerName.includes('Silas')) return 'SILAS';
+  return customer.avatarKey.toUpperCase();
+};
+
 interface WorkshopScreenProps {
   data: WorkshopState;
   onDeliverJob: () => void;
@@ -82,7 +93,7 @@ export const WorkshopScreen: React.FC<WorkshopScreenProps> = ({
               <View style={styles.portraitWrapper}>
                 <Image source={npcImg} style={styles.portraitImage} resizeMode="cover" />
                 <View style={styles.avatarPill}>
-                  <Text style={styles.avatarPillText}>{data.customer.avatarKey.toUpperCase()}</Text>
+                  <Text style={styles.avatarPillText}>{getCustomerBadgeText(data.customer)}</Text>
                 </View>
               </View>
 

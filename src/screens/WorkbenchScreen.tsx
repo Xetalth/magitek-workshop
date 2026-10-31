@@ -135,7 +135,7 @@ export const WorkbenchScreen: React.FC<WorkbenchScreenProps> = ({
             );
           }
           if (
-            ['read_sensor_rpm', 'monitor_valve_pressure', 'write_grain_record', 'calculate_water_share'].includes(
+            ['read_sensor_rpm', 'transmit_packet', 'monitor_valve_pressure', 'write_grain_record', 'calculate_water_share'].includes(
               token
             )
           ) {
@@ -199,7 +199,7 @@ export const WorkbenchScreen: React.FC<WorkbenchScreenProps> = ({
           <View style={styles.loadingContent}>
             <Text style={styles.loadingTitle}>⚙️ Makina Şebekesinden Telemetri Alınıyor...</Text>
             <Text style={styles.loadingSubtitle}>
-              Groq AI (openai/gpt-oss-120b) ile gömülü C arızası ve test harness senkronize ediliyor...
+              Groq AI (qwen/qwen3.8-27b) ile gömülü C arızası ve test harness senkronize ediliyor...
             </Text>
           </View>
         </View>
@@ -212,12 +212,27 @@ export const WorkbenchScreen: React.FC<WorkbenchScreenProps> = ({
             <View style={styles.deviceNameRow}>
               <Text style={styles.deviceNameText}>{activeMod.deviceName}</Text>
               {(activeMod.id.startsWith('dynamic_task_') ||
-                activeMod.deviceName.includes('[CANLI AI]')) && (
+                activeMod.deviceName.includes('[CANLI AI]')) ? (
                 <View style={styles.liveAiBadge}>
                   <Ionicons name="sparkles" size={10} color={COLORS.neonGreenBright} />
                   <Text style={styles.liveAiBadgeText}>CANLI AI</Text>
                 </View>
+              ) : (
+                <View style={[styles.liveAiBadge, styles.seedPoolBadge]}>
+                  <Ionicons name="hardware-chip-outline" size={10} color={COLORS.neonCyanBright} />
+                  <Text style={[styles.liveAiBadgeText, styles.seedPoolBadgeText]}>GÖREV HAVUZU</Text>
+                </View>
               )}
+
+              {/* Havuzdaki alternatif tohum görevine geçme butonu */}
+              <TouchableOpacity
+                style={styles.cycleTaskButton}
+                onPress={() => onSelectModule(activeMod.id)}
+                activeOpacity={0.7}
+              >
+                <Ionicons name="sync-outline" size={11} color={COLORS.neonAmberBright} />
+                <Text style={styles.cycleTaskButtonText}>Alternatif Görev</Text>
+              </TouchableOpacity>
             </View>
             <Text style={styles.deviceCodeText}>{activeMod.deviceCode}</Text>
           </View>
@@ -973,6 +988,30 @@ const styles = StyleSheet.create({
     fontSize: 9,
     fontWeight: '800',
     letterSpacing: 0.5,
+  },
+  seedPoolBadge: {
+    backgroundColor: 'rgba(6, 182, 212, 0.16)',
+    borderColor: COLORS.neonCyanBright,
+  },
+  seedPoolBadgeText: {
+    color: COLORS.neonCyanBright,
+  },
+  cycleTaskButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    backgroundColor: 'rgba(245, 158, 11, 0.15)',
+    borderWidth: 1,
+    borderColor: COLORS.neonAmberBright,
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: 6,
+  },
+  cycleTaskButtonText: {
+    color: COLORS.neonAmberBright,
+    fontSize: 9,
+    fontWeight: '800',
+    letterSpacing: 0.3,
   },
   deviceNameText: {
     color: COLORS.textPrimary,

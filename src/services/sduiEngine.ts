@@ -6,14 +6,34 @@ import {
   WorkbenchModuleData,
   CustomerIssue,
 } from '../types/sdui';
-import { CURRICULUM_MODULES, MODULE_ORDER } from '../data/curriculumModules';
+import {
+  CURRICULUM_MODULES,
+  getModuleTaskFromPool,
+  MODULE_TASK_POOLS,
+  shufflePatchOptions,
+} from '../data/curriculumModules';
+import {
+  REQUIRED_TASKS_PER_MODULE,
+  PEDAGOGICAL_MODULES,
+  CURRICULUM_MODULE_ORDER,
+} from '../data/curriculumData';
+import { CurriculumModuleId } from '../types/curriculum';
 import { geminiTaskService, GeminiTaskPayload } from './geminiTaskService';
+
+/**
+ * Canlı API / Saf Görev Havuzu Yapılandırması
+ * false: Groq API'ye hiçbir HTTP isteği atılmaz, 12 görevlik kararlı tohum havuzu kullanılır (Demo/Test modu)
+ * true: Canlı Groq API çağrıları aktif edilir
+ */
+export const USE_LIVE_AI = false; // Havuz testi ve kararlı demo modu
 
 interface InternalState {
   activeTab: TabType;
   activeModuleId: ModuleId;
   currentWorkshopModuleId: ModuleId;
   completedModuleIds: ModuleId[];
+  moduleTaskCounts: Record<string, number>;
+  modulePoolIndices: Record<string, number>; // Hangi modülde tohum havuzunun hangi görevinin aktif olduğu
   dynamicModuleOrder: ModuleId[];
   gold: number;
   exp: number;
@@ -79,10 +99,22 @@ class SDUIEngineService {
   constructor() {
     this.state = {
       activeTab: 'workshop',
-      activeModuleId: 'module_1_loops',
-      currentWorkshopModuleId: 'module_1_loops',
+      activeModuleId: 'module_1_control',
+      currentWorkshopModuleId: 'module_1_control',
       completedModuleIds: [],
-      dynamicModuleOrder: [...MODULE_ORDER],
+      moduleTaskCounts: {
+        module_1_control: 0,
+        module_2_arrays: 0,
+        module_3_pointers: 0,
+        module_4_structs_bits: 0,
+      },
+      modulePoolIndices: {
+        module_1_control: 0,
+        module_2_arrays: 0,
+        module_3_pointers: 0,
+        module_4_structs_bits: 0,
+      },
+      dynamicModuleOrder: [...CURRICULUM_MODULE_ORDER],
       gold: 150,
       exp: 20,
       day: 3,
@@ -93,9 +125,10 @@ class SDUIEngineService {
       hardwareVoltage: 3.3,
       terminalLogs: [
         '--- Magitek Gömülü Tezgâh Başlatıldı ---',
+        'Müfredat: Samsun Üniversitesi YZM101/105 // Modül 1',
         'Cihaz Algılandı: MCU-HT8 (Hydro-Tick 8)',
         'ROM: 32KB Flash // RAM: 2KB SRAM',
-        'Durum: HATA_KODU_0x0F (Tampon Taşması / Buffer Overflow)',
+        'Durum: HATA_KODU_0x0F (Döngü Sınır Hatası / Off-by-One)',
         'İpucu: Tezgâhta arızalı C kodunu inceleyip uygun yamayı seçin.',
       ],
       lastTestSuccess: undefined,
@@ -103,15 +136,38 @@ class SDUIEngineService {
       isLoadingDynamicTask: false,
     };
 
-    // İlk görev için dinamik arka plan yüklemesini tetikle (sessiz)
-    this.fetchAndApplyDynamicTask('module_1_loops', true);
-
-    // Otonom Arka Plan Görev Kuyruğu: Sıradaki görevi (module_2_memory) önceden hazırla
-    this.prefetchNextTask();
+    // İlk görev için (module_1_control) tohum havuzundan hemen hazırla ve şıkları karıştır
+    const initialPoolIdx = this.state.modulePoolIndices['module_1_control'] || 0;
+    this.dynamicTasks['module_1_control'] = geminiTaskService.getStaticFallbackTask('module_1_control', initialPoolIdx);
+    if (USE_LIVE_AI) {
+      this.fetchAndApplyDynamicTask('module_1_control', true);
+    }
   }
 
   /**
-   * Modül verisini alır (Canlı Gemini çıktısı varsa onu, yoksa statik müfredatı kullanır)
+   * Modül için havuzdaki sıradaki / alternatif görevin indisini döngüsel olarak artırıp döndürür
+   */
+  public getNextPoolIndex(moduleId: ModuleId): number {
+    const baseKey = CURRICULUM_MODULE_ORDER.includes(moduleId as CurriculumModuleId)
+      ? (moduleId as CurriculumModuleId)
+      : 'module_1_control';
+    const pool = MODULE_TASK_POOLS[baseKey] || MODULE_TASK_POOLS.module_1_control;
+    const poolLength = pool.length || 3;
+    const current = this.state.modulePoolIndices[moduleId] ?? 0;
+    const next = (current + 1) % poolLength;
+    this.state.modulePoolIndices[moduleId] = next;
+    return next;
+  }
+
+  /**
+   * Modül için geçerli havuz indisini döndürür
+   */
+  public getPoolIndex(moduleId: ModuleId): number {
+    return this.state.modulePoolIndices[moduleId] ?? 0;
+  }
+
+  /**
+   * Modül verisini alır (Canlı Gemini/Groq çıktısı varsa onu, yoksa tohum görev havuzunu kullanır)
    */
   private getModuleData(moduleId: ModuleId): WorkbenchModuleData {
     const dynamic = this.dynamicTasks[moduleId];
@@ -131,18 +187,32 @@ class SDUIEngineService {
         rewardItemName: dynamic.rewardItemName,
       };
     }
-    return CURRICULUM_MODULES[moduleId]?.moduleData || CURRICULUM_MODULES.module_1_loops.moduleData;
+    const poolIdx = this.getPoolIndex(moduleId);
+    const bundle = getModuleTaskFromPool(moduleId, poolIdx);
+    return {
+      ...bundle.moduleData,
+      patchOptions: shufflePatchOptions(bundle.moduleData.patchOptions),
+    };
   }
 
   /**
-   * Müşteri / Görev veren verisini alır
+   * Müşteri / Görev veren verisini alır (Karakter ve NPC tutarlılığı korunur)
    */
   private getCustomerData(moduleId: ModuleId): CustomerIssue {
+    const poolIdx = this.getPoolIndex(moduleId);
+    const baseBundle = getModuleTaskFromPool(moduleId, poolIdx);
     const dynamic = this.dynamicTasks[moduleId];
     if (dynamic) {
-      return dynamic.customer;
+      return {
+        customerName: baseBundle.customer.customerName,
+        customerRole: baseBundle.customer.customerRole,
+        avatarKey: baseBundle.customer.avatarKey,
+        dialogText: dynamic.customer?.dialogText || baseBundle.customer.dialogText,
+        physicalSymptom: dynamic.customer?.physicalSymptom || baseBundle.customer.physicalSymptom,
+        engineerDiagnosis: dynamic.customer?.engineerDiagnosis || baseBundle.customer.engineerDiagnosis,
+      };
     }
-    return CURRICULUM_MODULES[moduleId]?.customer || CURRICULUM_MODULES.module_1_loops.customer;
+    return baseBundle.customer;
   }
 
   public subscribe(listener: (state: SDUIState) => void): () => void {
@@ -166,7 +236,7 @@ class SDUIEngineService {
   }
 
   /**
-   * Gemini API üzerinden dinamik görev yükler ve arayüzü günceller
+   * Pedagojik guardrail kuralları ile Groq API veya tohum havuzundan görev yükler
    */
   public async fetchAndApplyDynamicTask(moduleId: ModuleId, silent: boolean = false): Promise<void> {
     // Tamamlanmış modüller için yeniden çekme
@@ -174,11 +244,39 @@ class SDUIEngineService {
       return;
     }
 
+    const poolIndex = this.getPoolIndex(moduleId);
+
     // Kuyrukta hazır bekleyen arıza varsa anında devreye al (Zero-Latency)
     if (this.taskQueue.has(moduleId)) {
       const queued = this.taskQueue.get(moduleId)!;
       this.dynamicTasks[moduleId] = queued;
       this.taskQueue.delete(moduleId);
+      this.notify();
+      return;
+    }
+
+    // Çevrimdışı / Tohum Havuzu güvencesi: Eğer görev henüz yoksa hemen havuzdan ata
+    if (!this.dynamicTasks[moduleId]) {
+      this.dynamicTasks[moduleId] = geminiTaskService.getStaticFallbackTask(moduleId, poolIndex);
+      this.notify();
+    }
+
+    // Saf Görev Havuzu (Offline Task Pool) Modu: Canlı API kapalıysa hiçbir HTTP isteği atma
+    if (!USE_LIVE_AI) {
+      this.state.isLoadingDynamicTask = false;
+      const pedModule = geminiTaskService.resolvePedagogicalModule(moduleId);
+      const poolTask = geminiTaskService.getStaticFallbackTask(moduleId, poolIndex);
+      this.dynamicTasks[moduleId] = poolTask;
+
+      if (this.state.activeModuleId === moduleId) {
+        this.state.terminalLogs = [
+          ...this.state.terminalLogs,
+          `⚙️ Makina Şebekesinden Telemetri Alındı [DOĞRULANMIŞ GÖREV HAVUZU]`,
+          `Pedagojik Modül: ${pedModule.title}`,
+          `Cihaz: ${poolTask.deviceName} (${poolTask.deviceCode})`,
+          `Belirti: ${poolTask.customer.physicalSymptom}`,
+        ];
+      }
       this.notify();
       return;
     }
@@ -190,9 +288,8 @@ class SDUIEngineService {
 
     try {
       this.lastPrefetchTime = Date.now();
-      const classLevel = 1;
-      const stageProgress = this.state.completedModuleIds.length;
-      const payload = await geminiTaskService.fetchDynamicTask(moduleId, classLevel, stageProgress);
+      const pedModule = geminiTaskService.resolvePedagogicalModule(moduleId);
+      const payload = await geminiTaskService.fetchDynamicTask(moduleId, pedModule, 1, poolIndex);
 
       this.dynamicTasks[moduleId] = payload;
 
@@ -200,16 +297,15 @@ class SDUIEngineService {
       if (this.state.activeModuleId === moduleId) {
         this.state.terminalLogs = [
           ...this.state.terminalLogs,
-          `⚙️ Makina Şebekesinden Telemetri Alındı [${payload.isDynamic ? 'CANLI AI // GROQ' : 'STATİK KANAL'}]`,
+          `⚙️ Makina Şebekesinden Telemetri Alındı [${payload.isDynamic ? 'CANLI AI // GROQ' : 'DOĞRULANMIŞ GÖREV HAVUZU'}]`,
+          `Pedagojik Modül: ${pedModule.title}`,
           `Cihaz: ${payload.deviceName} (${payload.deviceCode})`,
           `Belirti: ${payload.customer.physicalSymptom}`,
         ];
       }
     } catch (err) {
-      console.warn('[SDUIEngine] Dinamik görev yüklenirken hata:', err);
-      if (!this.dynamicTasks[moduleId]) {
-        this.dynamicTasks[moduleId] = geminiTaskService.getStaticFallbackTask(moduleId);
-      }
+      console.warn('[SDUIEngine] Canlı API hatası (Kota 429 vb.), tohum görev havuzu devrede:', err);
+      this.dynamicTasks[moduleId] = geminiTaskService.getStaticFallbackTask(moduleId, poolIndex);
     } finally {
       if (!silent) {
         this.state.isLoadingDynamicTask = false;
@@ -219,16 +315,26 @@ class SDUIEngineService {
   }
 
   public selectModule(moduleId: ModuleId): void {
+    const isSameModule = this.state.activeModuleId === moduleId;
     this.state.activeModuleId = moduleId;
 
-    // Kuyrukta hazır bekleyen arıza varsa hemen aktar
     if (this.taskQueue.has(moduleId) && !this.dynamicTasks[moduleId]) {
       this.dynamicTasks[moduleId] = this.taskQueue.get(moduleId)!;
       this.taskQueue.delete(moduleId);
     }
 
-    const modData = this.getModuleData(moduleId);
     const isCompleted = this.state.completedModuleIds.includes(moduleId);
+
+    // Eğer aynı modül tekrar seçildiyse havuzdaki alternatif göreve geç (Döngüsel rotasyon)
+    if (isSameModule && !isCompleted) {
+      const nextPoolIdx = this.getNextPoolIndex(moduleId);
+      this.dynamicTasks[moduleId] = geminiTaskService.getStaticFallbackTask(moduleId, nextPoolIdx);
+    } else if (!this.dynamicTasks[moduleId]) {
+      const poolIdx = this.getPoolIndex(moduleId);
+      this.dynamicTasks[moduleId] = geminiTaskService.getStaticFallbackTask(moduleId, poolIdx);
+    }
+
+    const modData = this.getModuleData(moduleId);
 
     this.state.selectedPatchId = null;
     this.state.inspectionStatus = isCompleted ? 'REPAIRED' : 'ANALYZING';
@@ -240,17 +346,13 @@ class SDUIEngineService {
       `Arıza Tanısı: ${modData.physicalSymptom}`,
       isCompleted
         ? '[BİLGİ] Bu modül başarıyla çözüldü ve onaylandı.'
-        : 'İşlem: Bozuk C bloğunu inceleyin ve düzeltme yamasını derleyin.',
+        : 'İşlem: Bozuk C bloğunu inceleyin ve uygun düzeltme yamasını derleyin.',
     ];
     this.notify();
 
-    // Dinamik görev henüz çekilmediyse ve modül henüz tamamlanmadıysa çek
-    if (!this.dynamicTasks[moduleId] && !isCompleted) {
+    if (!isCompleted && USE_LIVE_AI && this.dynamicTasks[moduleId]?.isDynamic === false) {
       this.fetchAndApplyDynamicTask(moduleId, true);
     }
-
-    // Kullanıcı bu modülü incelerken sıradaki görevi otonom olarak prefetch et
-    this.prefetchNextTask();
   }
 
   public selectPatch(patchId: string): void {
@@ -284,7 +386,6 @@ class SDUIEngineService {
     this.state.hardwareTempC = outcome.hardwareTempC;
     this.state.lastTestSuccess = outcome.success;
 
-    // Terminal loglarını besle
     this.state.terminalLogs = [
       '==================================================',
       `[MAGITEK DERLEYİCİ] ${modData.deviceCode} test ediliyor...`,
@@ -313,16 +414,22 @@ class SDUIEngineService {
     }
   }
 
+  /**
+   * Görevi teslim eder ve tek parametreli REQUIRED_TASKS_PER_MODULE kilit sistemine göre modülü onaylar
+   */
   public deliverJob(): { rewardGold: number; rewardExp: number; nextModuleId?: ModuleId } {
-    const currentModuleId = this.state.activeModuleId;
+    const currentModuleId = this.state.currentWorkshopModuleId;
     const modData = this.getModuleData(currentModuleId);
+
+    // Mevcut modüldeki çözülen görev sayısını artır
+    const currentCount = (this.state.moduleTaskCounts[currentModuleId] || 0) + 1;
+    this.state.moduleTaskCounts[currentModuleId] = currentCount;
 
     const isAlreadyCompleted = this.state.completedModuleIds.includes(currentModuleId);
     let rewardGold = modData.rewardGold;
     let rewardExp = modData.rewardExp;
 
     if (!isAlreadyCompleted) {
-      this.state.completedModuleIds = [...this.state.completedModuleIds, currentModuleId];
       this.state.gold += rewardGold;
       this.state.exp = Math.min(100, this.state.exp + rewardExp);
       this.state.day += 1;
@@ -333,11 +440,17 @@ class SDUIEngineService {
 
     this.state.jobStatus = 'DELIVERED';
 
-    // Sıradaki açılmamış modülü belirle
-    const currentIndex = this.state.dynamicModuleOrder.indexOf(currentModuleId);
+    // Eşik kontrolü: Çözülen görev sayısı REQUIRED_TASKS_PER_MODULE değerine ulaştı mı?
+    const thresholdReached = currentCount >= REQUIRED_TASKS_PER_MODULE;
     let nextModuleId: ModuleId | undefined;
-    if (currentIndex >= 0 && currentIndex < this.state.dynamicModuleOrder.length - 1) {
-      nextModuleId = this.state.dynamicModuleOrder[currentIndex + 1];
+
+    if (thresholdReached && !isAlreadyCompleted) {
+      this.state.completedModuleIds = [...this.state.completedModuleIds, currentModuleId];
+
+      const currentIndex = CURRICULUM_MODULE_ORDER.indexOf(currentModuleId as CurriculumModuleId);
+      if (currentIndex >= 0 && currentIndex < CURRICULUM_MODULE_ORDER.length - 1) {
+        nextModuleId = CURRICULUM_MODULE_ORDER[currentIndex + 1];
+      }
     }
 
     this.notify();
@@ -345,103 +458,133 @@ class SDUIEngineService {
   }
 
   /**
+   * Bir sonraki göreve / modüle ilerler
+   * REQUIRED_TASKS_PER_MODULE eşiğine ulaşıldığında sıradaki modülün kilidini açar ve görevi ona geçirir.
+   * Eşiğe henüz ulaşılmadıysa aynı modülde bir sonraki görevi üretir.
+   * Pedagojik Kural: Modül 1 bitmeden Modül 2'nin görevleri üretilmez!
+   */
+  public async advanceToNextModule(): Promise<void> {
+    const currentModuleId = this.state.currentWorkshopModuleId;
+    const currentCount = this.state.moduleTaskCounts[currentModuleId] || 0;
+    const thresholdReached = currentCount >= REQUIRED_TASKS_PER_MODULE;
+    const currentIndex = CURRICULUM_MODULE_ORDER.indexOf(currentModuleId as CurriculumModuleId);
+
+    if (thresholdReached) {
+      // Modül tamamlandı -> Sıradaki modüle geç
+      if (currentIndex >= 0 && currentIndex < CURRICULUM_MODULE_ORDER.length - 1) {
+        const nextId = CURRICULUM_MODULE_ORDER[currentIndex + 1];
+        this.state.currentWorkshopModuleId = nextId;
+
+        // Sıradaki modülün görevini tohum havuzundan hemen hazırla (Sıradaki alternatif tohum görevi)
+        const nextPoolIdx = this.getPoolIndex(nextId);
+        this.dynamicTasks[nextId] = geminiTaskService.getStaticFallbackTask(nextId, nextPoolIdx);
+        this.selectModule(nextId);
+        this.state.activeTab = 'workshop';
+        this.notify();
+
+        // Canlı mod açıksa arka planda API'yi dene
+        if (USE_LIVE_AI) {
+          await this.fetchAndApplyDynamicTask(nextId, false);
+        }
+      } else {
+        // Tüm 4 modül tamamlandı (1. Sınıf Mezuniyeti)
+        this.selectModule(currentModuleId);
+        this.state.activeTab = 'workbench';
+        this.notify();
+      }
+    } else {
+      // Eşik dolmadı (Örn: REQUIRED_TASKS_PER_MODULE = 4):
+      // AYNI modül için sıradaki tohum görevini havuzdan getir (Devir sayacı -> Buhar regülatörü -> Termostat)
+      this.state.activeTab = 'workbench';
+      this.state.selectedPatchId = null;
+      this.state.inspectionStatus = 'ANALYZING';
+      this.state.jobStatus = 'IN_WORKBENCH';
+
+      const nextPoolIdx = this.getNextPoolIndex(currentModuleId);
+      this.dynamicTasks[currentModuleId] = geminiTaskService.getStaticFallbackTask(currentModuleId, nextPoolIdx);
+      this.notify();
+
+      if (USE_LIVE_AI) {
+        await this.fetchAndApplyDynamicTask(currentModuleId, false);
+      }
+    }
+  }
+
+  /**
+   * Tezgâhta incelenmek üzere aktif modülün bir sonraki alternatif tohum görevini yükler
+   */
+  public cycleAlternativeTask(): void {
+    const currentId = this.state.activeModuleId;
+    const isCompleted = this.state.completedModuleIds.includes(currentId);
+
+    const nextPoolIdx = this.getNextPoolIndex(currentId);
+    this.dynamicTasks[currentId] = geminiTaskService.getStaticFallbackTask(currentId, nextPoolIdx);
+    this.state.selectedPatchId = null;
+    this.state.inspectionStatus = isCompleted ? 'REPAIRED' : 'ANALYZING';
+    this.state.jobStatus = isCompleted ? 'DELIVERED' : 'IN_WORKBENCH';
+
+    const modData = this.getModuleData(currentId);
+    this.state.terminalLogs = [
+      `--- Alternatif Görev Yüklendi (${modData.deviceName}) ---`,
+      `Akademik Ünite: ${modData.academicUnit}`,
+      `Arıza Tanısı: ${modData.physicalSymptom}`,
+      'İşlem: Yeni C kodunu inceleyip uygun yamayı seçin.',
+    ];
+    this.notify();
+  }
+
+  /**
    * Otonom Arka Plan Görev Kuyruğu (Task Prefetching)
-   * Kullanıcı mevcut arızayı incelerken/çözerken sistem arka planda bir sonraki
-   * dinamik arızayı Gemini API'den sessizce çeker ve kuyrukta hazır tutar.
+   * Pedagojik Kural: Modül 1 bitmeden Modül 2 görevleri ASLA prefetch edilmez!
    */
   public async prefetchNextTask(): Promise<void> {
+    // Canlı AI kapalıysa prefetch yapma (Saf Görev Havuzu Modu)
+    if (!USE_LIVE_AI) return;
     if (this.isPrefetching) return;
 
-    // Rate-limit engelleyici: Son istek üzerinden en az 6 saniye geçmediyse bekle/pas geç
     const now = Date.now();
     if (now - this.lastPrefetchTime < 6000) {
-      console.log(
-        `[SDUIEngine: Prefetch] Cooldown devrede (${Math.round((6000 - (now - this.lastPrefetchTime)) / 1000)}s kaldı), yeni istek atılmadı.`
-      );
       return;
     }
 
-    const order = this.state.dynamicModuleOrder;
-    const currentIndex = order.indexOf(this.state.currentWorkshopModuleId);
-    let nextTargetId: ModuleId;
+    const currentModuleId = this.state.currentWorkshopModuleId;
+    const currentCount = this.state.moduleTaskCounts[currentModuleId] || 0;
 
-    if (currentIndex >= 0 && currentIndex < order.length - 1) {
-      nextTargetId = order[currentIndex + 1];
-    } else {
-      const nextNumber = order.length + 1;
-      nextTargetId = `dynamic_task_${nextNumber}`;
-      if (!order.includes(nextTargetId)) {
-        order.push(nextTargetId);
+    let targetId: ModuleId;
+    if (currentCount >= REQUIRED_TASKS_PER_MODULE) {
+      const currentIndex = CURRICULUM_MODULE_ORDER.indexOf(currentModuleId as CurriculumModuleId);
+      if (currentIndex >= 0 && currentIndex < CURRICULUM_MODULE_ORDER.length - 1) {
+        targetId = CURRICULUM_MODULE_ORDER[currentIndex + 1];
+      } else {
+        return;
       }
+    } else {
+      // Mevcut modül henüz bitmedi; sıradaki modül çekilemez
+      targetId = currentModuleId;
     }
 
-    // Zaten kuyrukta veya önbellekte varsa tekrar çekme
-    if (this.taskQueue.has(nextTargetId) || this.dynamicTasks[nextTargetId]) {
+    if (this.taskQueue.has(targetId) || this.dynamicTasks[targetId]) {
       return;
     }
 
     this.isPrefetching = true;
     try {
       this.lastPrefetchTime = Date.now();
-      const classLevel = 1;
-      const stageProgress = this.state.completedModuleIds.length + 1;
+      const pedModule = geminiTaskService.resolvePedagogicalModule(targetId);
       const payload = await geminiTaskService.fetchDynamicTask(
-        nextTargetId,
-        classLevel,
-        stageProgress
+        targetId,
+        pedModule,
+        1,
+        currentCount
       );
 
-      if (nextTargetId.startsWith('dynamic_task_') || payload.isDynamic) {
-        if (!payload.deviceName.includes('[CANLI AI]')) {
-          payload.deviceName = `[CANLI AI] ${payload.deviceName}`;
-        }
-      }
-
-      this.taskQueue.set(nextTargetId, payload);
-      this.dynamicTasks[nextTargetId] = payload;
+      this.taskQueue.set(targetId, payload);
+      this.dynamicTasks[targetId] = payload;
     } catch (err) {
-      console.warn('[SDUIEngine] Sıradaki görev prefetch edilirken hata, fallback hazırlandı:', err);
-      const fallback = geminiTaskService.getStaticFallbackTask(nextTargetId);
-      this.taskQueue.set(nextTargetId, fallback);
-      this.dynamicTasks[nextTargetId] = fallback;
+      console.warn('[SDUIEngine] Prefetch hatası:', err);
     } finally {
       this.isPrefetching = false;
     }
-  }
-
-  public async advanceToNextModule(): Promise<void> {
-    const order = this.state.dynamicModuleOrder;
-    const currentIndex = order.indexOf(this.state.currentWorkshopModuleId);
-    let nextId: ModuleId;
-
-    if (currentIndex >= 0 && currentIndex < order.length - 1) {
-      nextId = order[currentIndex + 1];
-    } else {
-      const nextNumber = order.length + 1;
-      nextId = `dynamic_task_${nextNumber}`;
-      if (!order.includes(nextId)) {
-        order.push(nextId);
-      }
-    }
-
-    // Sıfır gecikme (Zero-Latency): Kuyrukta hazır bekleyen arıza veya önbellek
-    const prefetched = this.taskQueue.get(nextId) || this.dynamicTasks[nextId];
-    if (prefetched) {
-      this.dynamicTasks[nextId] = prefetched;
-      this.taskQueue.delete(nextId);
-    } else {
-      // API gecikmesi veya internet kopmasında şeffaf yerel fallback
-      const fallback = geminiTaskService.getStaticFallbackTask(nextId);
-      this.dynamicTasks[nextId] = fallback;
-    }
-
-    this.state.currentWorkshopModuleId = nextId;
-    this.selectModule(nextId);
-    this.state.activeTab = 'workshop';
-    this.notify();
-
-    // Kullanıcı yeni göreve geçer geçmez sıradaki görevi otonom olarak arka planda hazırla
-    this.prefetchNextTask();
   }
 
   /**
@@ -472,35 +615,37 @@ class SDUIEngineService {
   private toDeclarativeSDUI(): SDUIState {
     const activeModData = this.getModuleData(this.state.activeModuleId);
     const completedCount = this.state.completedModuleIds.length;
-    const totalModules = MODULE_ORDER.length;
+    const totalModules = CURRICULUM_MODULE_ORDER.length; // 4
 
     // Seviye Unvanı
-    let levelTitle = 'Lv.1 Bağımsız Mühendis';
-    if (completedCount === 1) levelTitle = 'Lv.1 Atölye Çırağı';
-    else if (completedCount === 2) levelTitle = 'Lv.1 Kıdemli Teknisyen';
-    else if (completedCount === 3) levelTitle = 'Lv.1 Sistem Mühendisi';
-    else if (completedCount >= 4) levelTitle = 'Lv.2 Mezun Mühendis';
+    let levelTitle = 'Lv.1 Çırak Mühendis';
+    if (completedCount === 1) levelTitle = 'Lv.1 Kontrol Mühendisi';
+    else if (completedCount === 2) levelTitle = 'Lv.1 Dizi & Tampon Uzmanı';
+    else if (completedCount === 3) levelTitle = 'Lv.1 Gösterici & Bellek Mimarı';
+    else if (completedCount >= totalModules) levelTitle = 'Lv.2 Mezun Mühendis';
 
+    // 4. modül tamamlandığında arayüzdeki "1. Sınıf İlerlemesi" sayacı:
+    // '4/4 Modül Onaylandı - 1. Sınıf Mezuniyeti Tamamlandı'
     let academicProgress = `1. Sınıf İlerlemesi: ${completedCount}/${totalModules} Modül Onaylandı`;
     if (completedCount >= totalModules) {
-      academicProgress = `1. Sınıf Mezun // Saha Görevi: ${completedCount} Çözüldü`;
+      academicProgress = '4/4 Modül Onaylandı - 1. Sınıf Mezuniyeti Tamamlandı';
     }
 
     const hudState = {
       levelTitle,
       expPercentage: this.state.exp,
-      classTitle: '1. Sınıf: Algoritmalar, C & Donanım Temelleri',
+      classTitle: 'Samsun Üniv. Yazılım Müh. // 1. Sınıf Çekirdek Müfredatı',
       gold: this.state.gold,
       day: this.state.day,
       academicProgress,
     };
 
-    // Workshop State: Her zaman aktif atölye görevine (currentWorkshopModuleId) bağlı kalır
+    // Workshop State: Her zaman aktif atölye görevine bağlı kalır
     const workshopModId = this.state.currentWorkshopModuleId;
     const workshopCustomer = this.getCustomerData(workshopModId);
     const workshopModData = this.getModuleData(workshopModId);
-    // Sonsuz dinamik görev kuyruğu aktif olduğu için daima sıradaki görev mevcuttur
-    const hasNextModule = true;
+    const currentTasksInMod = this.state.moduleTaskCounts[workshopModId] || 0;
+    const hasNextModule = completedCount < totalModules || currentTasksInMod < REQUIRED_TASKS_PER_MODULE;
 
     const workshopState = {
       customer: workshopCustomer,
@@ -511,14 +656,14 @@ class SDUIEngineService {
         exp: workshopModData.rewardExp,
         deviceName: workshopModData.deviceName,
         deviceCode: workshopModData.deviceCode,
-        statusText: 'Stabil // Saha Testinde',
+        statusText: `Stabil // Saha Testinde (${Math.min(currentTasksInMod, REQUIRED_TASKS_PER_MODULE)}/${REQUIRED_TASKS_PER_MODULE} Görev)`,
       },
       hasNextModule,
     };
 
     // Tezgâh Görev Listesi: YALNIZCA tamamlanan görevler ve mevcut aktif görev gösterilir!
-    const unlockedLimit = this.state.dynamicModuleOrder.indexOf(this.state.currentWorkshopModuleId);
-    const availableModules = this.state.dynamicModuleOrder.slice(0, unlockedLimit + 1).map((id) => {
+    const unlockedLimit = CURRICULUM_MODULE_ORDER.indexOf(this.state.currentWorkshopModuleId as CurriculumModuleId);
+    const availableModules = CURRICULUM_MODULE_ORDER.slice(0, unlockedLimit + 1).map((id) => {
       const b = this.getModuleData(id);
       return {
         id,
@@ -554,19 +699,35 @@ class SDUIEngineService {
       isLoadingDynamicTask: this.state.isLoadingDynamicTask,
     };
 
-    // Skills State
-    const nodes = MODULE_ORDER.map((id) => {
-      const b = CURRICULUM_MODULES[id];
-      const isUnlocked = this.state.completedModuleIds.includes(id) || id === this.state.activeModuleId;
+    // Skills State: Düğümler sırayla aktifleşsin
+    const nodes = CURRICULUM_MODULE_ORDER.map((id) => {
+      const b = CURRICULUM_MODULES[id] || CURRICULUM_MODULES.module_1_control;
+      const ped = PEDAGOGICAL_MODULES[id];
+      const isCompleted = this.state.completedModuleIds.includes(id);
+      const isCurrent = id === this.state.currentWorkshopModuleId;
+      const isUnlocked = isCompleted || isCurrent;
+      const tasksDone = this.state.moduleTaskCounts[id] || 0;
+
       return {
         ...b.skillNode,
+        id: ped.id,
+        name: ped.title,
+        tier: ped.tier,
         status: (isUnlocked ? 'UNLOCKED' : 'LOCKED') as 'UNLOCKED' | 'LOCKED',
+        description: ped.description,
+        academicCredit: ped.academicCredit,
+        curriculumTopic: ped.curriculumTopic,
+        isCompleted,
+        isCurrent,
+        taskProgress: `${Math.min(tasksDone, REQUIRED_TASKS_PER_MODULE)}/${REQUIRED_TASKS_PER_MODULE} Görev`,
+        allowedTopics: ped.allowedTopics,
+        forbiddenTopics: ped.forbiddenTopics,
       };
     });
 
     const skillsState = {
-      treeTitle: '1. Sınıf Yazılım Mühendisliği Müfredat Ağacı',
-      semesterTitle: '1. Sınıf Güz / Bahar: Bilgisayar Mühendisliği Çekirdek Müfredat',
+      treeTitle: 'Samsun Üniversitesi Yazılım Mühendisliği 1. Sınıf Yetenekler Ağacı',
+      semesterTitle: '1. Sınıf (YZM101, YZM105, YZM102, YZM104) Pedagojik İlerleme Omurgası',
       nodes,
     };
 
@@ -581,8 +742,8 @@ class SDUIEngineService {
     };
 
     // Room State
-    const unlockedGadgets = MODULE_ORDER.map((id) => {
-      const b = CURRICULUM_MODULES[id];
+    const unlockedGadgets = CURRICULUM_MODULE_ORDER.map((id) => {
+      const b = CURRICULUM_MODULES[id] || CURRICULUM_MODULES.module_1_control;
       const isCompleted = this.state.completedModuleIds.includes(id);
       return {
         ...b.gadget,
@@ -596,7 +757,7 @@ class SDUIEngineService {
         completedCount === 0
           ? 'Oda henüz sade ve sessiz. Masada tek tük pirinç tamir aletleri duruyor.'
           : completedCount === 4
-          ? 'Oda tıkır tıkır çalışan gömülü aygıtlar, osiloskop yeşili ekranlar ve altın başarı beratıyla dolu bir magitek üssüne dönüştü!'
+          ? 'Oda tıkır tıkır çalışan gömülü aygıtlar, osiloskop yeşili ekranlar ve 1. Sınıf Mezuniyet Beratıyla dolu bir magitek üssüne dönüştü!'
           : `Tamamlanan modüllerle odaya ${completedCount} yeni donanım ve teşhis aparatı eklendi.`,
       systemSpecs: {
         arch: 'x86_64 POSIX Sandbox // Magitek AVR Core',

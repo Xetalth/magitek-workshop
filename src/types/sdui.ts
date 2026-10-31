@@ -101,6 +101,11 @@ export interface SkillNode {
   description: string;
   academicCredit: string;
   curriculumTopic: string;
+  isCompleted?: boolean;
+  isCurrent?: boolean;
+  taskProgress?: string;
+  allowedTopics?: string[];
+  forbiddenTopics?: string[];
 }
 
 export interface SkillsState {
