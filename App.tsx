@@ -10,8 +10,6 @@ import { BottomTabBar } from './src/components/BottomTabBar';
 import { WorkshopScreen } from './src/screens/WorkshopScreen';
 import { WorkbenchScreen } from './src/screens/WorkbenchScreen';
 import { SkillsScreen } from './src/screens/SkillsScreen';
-import { ShopScreen } from './src/screens/ShopScreen';
-import { RoomScreen } from './src/screens/RoomScreen';
 import { COLORS } from './src/theme/colors';
 
 export default function App() {
@@ -57,9 +55,11 @@ export default function App() {
     sduiEngine.advanceToNextModule();
   };
 
-  const handleBuyShopItem = (itemId: string) => {
-    sduiEngine.buyShopItem(itemId);
+  const handleSelectStage = (stage: number) => {
+    sduiEngine.switchViewStage(stage);
   };
+
+
 
   const renderCurrentScreen = () => {
     switch (sduiState.activeTab) {
@@ -81,28 +81,21 @@ export default function App() {
             onSelectPatch={handleSelectPatch}
             onCompileAndTest={handleCompileAndTest}
             onGoToWorkshop={handleGoToWorkshop}
+            onSelectStage={handleSelectStage}
           />
         );
       case 'skills':
         return <SkillsScreen data={sduiState.skills} />;
-      case 'shop':
-        return (
-          <ShopScreen
-            data={sduiState.shop}
-            gold={sduiState.hud.gold}
-            onBuyItem={handleBuyShopItem}
-          />
-        );
-      case 'room':
-        return (
-          <RoomScreen
-            room={sduiState.room}
-            workshop={sduiState.workshop}
-            shop={sduiState.shop}
-          />
-        );
       default:
-        return null;
+        return (
+          <WorkshopScreen
+            data={sduiState.workshop}
+            onDeliverJob={handleDeliverJob}
+            onGoToWorkbench={handleGoToWorkbench}
+            onSelectModule={handleSelectModule}
+            onNextModule={handleNextModule}
+          />
+        );
     }
   };
 
@@ -117,7 +110,7 @@ export default function App() {
         {/* Aktif Declarative SDUI Ekranı */}
         <View style={styles.body}>{renderCurrentScreen()}</View>
 
-        {/* 5 Sekmeli Alt Navigasyon Barı (İş Masası Uyarı Rozetli) */}
+        {/* 3 Sekmeli Alt Navigasyon Barı (İş Masası Uyarı Rozetli) */}
         <BottomTabBar
           activeTab={sduiState.activeTab}
           hasWorkbenchAlert={sduiState.workbench.hasPendingWork}

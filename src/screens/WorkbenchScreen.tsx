@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   View,
   Text,
@@ -11,6 +12,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { WorkbenchState, ModuleId } from '../types/sdui';
 import { COLORS } from '../theme/colors';
+import { sduiEngine } from '../services/sduiEngine';
 
 interface WorkbenchScreenProps {
   data: WorkbenchState;
@@ -18,44 +20,50 @@ interface WorkbenchScreenProps {
   onSelectPatch: (patchId: string) => void;
   onCompileAndTest: () => void;
   onGoToWorkshop: () => void;
+  onSelectStage?: (stage: number) => void;
 }
 
 interface ClassItem {
   id: string;
+  stageNumber: number;
   level: string;
   title: string;
   subtitle: string;
-  isUnlocked: boolean;
+
 }
 
 const CURRICULUM_CLASSES: ClassItem[] = [
   {
     id: 'class_1',
+    stageNumber: 1,
     level: '1. Sınıf',
     title: '1. Sınıf: Algoritmalar & C',
     subtitle: 'Temel Mantık, Döngüler, Göstericiler (Pointers), Bellek & Structs',
-    isUnlocked: true,
+
   },
   {
     id: 'class_2',
+    stageNumber: 2,
     level: '2. Sınıf',
     title: '2. Sınıf: Veri Yapıları & Bellek',
     subtitle: 'Bağlı Listeler, Ağaçlar, Heap Optimizasyonu & Buffer Tasarımı',
-    isUnlocked: false,
+
   },
   {
     id: 'class_3',
+    stageNumber: 3,
     level: '3. Sınıf',
     title: '3. Sınıf: İşletim Sistemleri & Çekirdek',
     subtitle: 'Donanım Kesmeleri (Interrupts), Sürücüler & Eşzamanlılık',
-    isUnlocked: false,
+
   },
   {
     id: 'class_4',
+    stageNumber: 4,
     level: '4. Sınıf',
     title: '4. Sınıf: Dağıtık Sistemler & Mimari',
     subtitle: 'Gömülü Magitek Bus, Protokol Doğrulama & Güvenilirlik',
-    isUnlocked: false,
+
   },
 ];
 
@@ -65,12 +73,16 @@ export const WorkbenchScreen: React.FC<WorkbenchScreenProps> = ({
   onSelectPatch,
   onCompileAndTest,
   onGoToWorkshop,
+  onSelectStage,
 }) => {
+  const insets = useSafeAreaInsets();
   const [isCompiling, setIsCompiling] = useState(false);
   const [classModalVisible, setClassModalVisible] = useState(false);
   const [taskModalVisible, setTaskModalVisible] = useState(false);
 
   const activeMod = data.activeModule;
+  const currentViewStage = data.currentViewStage ?? 1;
+  const currentClassObj = CURRICULUM_CLASSES.find((c) => c.stageNumber === currentViewStage) || CURRICULUM_CLASSES[0];
   const isOverheating = data.hardwareTelemetry.temperatureC > 75;
   const isRepaired = data.inspectionStatus === 'REPAIRED';
 
@@ -152,7 +164,10 @@ export const WorkbenchScreen: React.FC<WorkbenchScreenProps> = ({
   };
 
   return (
-    <ScrollView style={styles.screen} contentContainerStyle={styles.contentContainer}>
+    <ScrollView
+      style={styles.screen}
+      contentContainerStyle={[styles.contentContainer, { paddingBottom: 85 + insets.bottom }]}
+    >
       {/* İkili Magitek Dropdown Navigasyon Sistemi (Pill Bar Yerine) */}
       <View style={styles.dropdownContainer}>
         {/* Sol Dropdown: Aşama / Sınıf Seçici */}
@@ -167,7 +182,7 @@ export const WorkbenchScreen: React.FC<WorkbenchScreenProps> = ({
           </View>
           <View style={styles.dropdownValueRow}>
             <Text style={styles.dropdownValueText} numberOfLines={1}>
-              1. Sınıf: Algoritmalar & C
+              {currentClassObj.title}
             </Text>
             <Ionicons name="chevron-down" size={14} color={COLORS.neonAmberBright} />
           </View>
@@ -512,17 +527,25 @@ export const WorkbenchScreen: React.FC<WorkbenchScreenProps> = ({
 
             <ScrollView style={styles.modalList} showsVerticalScrollIndicator={false}>
               {CURRICULUM_CLASSES.map((cls) => {
-                const isSelected = cls.id === 'class_1';
+                const maxUnlocked = data.maxUnlockedStage ?? 1;
+                const isLocked = cls.stageNumber > maxUnlocked;
+                const isUnlocked = !isLocked;
+                const isSelected = cls.stageNumber === currentViewStage;
                 return (
                   <TouchableOpacity
                     key={cls.id}
                     style={[
                       styles.modalOptionCard,
-                      cls.isUnlocked ? styles.modalOptionUnlocked : styles.modalOptionLocked,
+                      isUnlocked ? styles.modalOptionUnlocked : styles.modalOptionLocked,
                       isSelected && styles.modalOptionActive,
                     ]}
-                    disabled={!cls.isUnlocked}
+                    disabled={isLocked}
                     onPress={() => {
+                      if (onSelectStage) {
+                        onSelectStage(cls.stageNumber);
+                      } else {
+                        sduiEngine.switchViewStage(cls.stageNumber);
+                      }
                       setClassModalVisible(false);
                     }}
                     activeOpacity={0.8}
@@ -530,14 +553,14 @@ export const WorkbenchScreen: React.FC<WorkbenchScreenProps> = ({
                     <View style={styles.optionTopRow}>
                       <View style={styles.optionTitleRow}>
                         <Ionicons
-                          name={cls.isUnlocked ? (isSelected ? 'radio-button-on' : 'school') : 'lock-closed'}
+                          name={isLocked ? 'lock-closed' : isSelected ? 'radio-button-on' : 'school'}
                           size={15}
-                          color={cls.isUnlocked ? (isSelected ? COLORS.neonCyanBright : COLORS.neonGreenBright) : COLORS.textMuted}
+                          color={isLocked ? COLORS.textMuted : isSelected ? COLORS.neonCyanBright : COLORS.neonGreenBright}
                         />
                         <Text
                           style={[
                             styles.optionTitle,
-                            cls.isUnlocked ? (isSelected ? styles.optionTitleActive : styles.optionTitleUnlocked) : styles.optionTitleLocked,
+                            isUnlocked ? (isSelected ? styles.optionTitleActive : styles.optionTitleUnlocked) : styles.optionTitleLocked,
                           ]}
                         >
                           {cls.title}
@@ -547,16 +570,24 @@ export const WorkbenchScreen: React.FC<WorkbenchScreenProps> = ({
                       <View
                         style={[
                           styles.optionBadge,
-                          cls.isUnlocked ? styles.optionBadgeUnlocked : styles.optionBadgeLocked,
+                          isSelected
+                            ? styles.optionBadgeActive
+                            : isUnlocked
+                            ? styles.optionBadgeUnlocked
+                            : styles.optionBadgeLocked,
                         ]}
                       >
                         <Text
                           style={[
                             styles.optionBadgeText,
-                            cls.isUnlocked ? styles.optionBadgeTextUnlocked : styles.optionBadgeTextLocked,
+                            isSelected
+                              ? styles.optionBadgeTextActive
+                              : isUnlocked
+                              ? styles.optionBadgeTextUnlocked
+                              : styles.optionBadgeTextLocked,
                           ]}
                         >
-                          {cls.isUnlocked ? 'SEÇİLİ' : 'KİLİTLİ'}
+                          {isSelected ? 'SEÇİLİ' : isLocked ? 'KİLİTLİ' : 'AÇIK'}
                         </Text>
                       </View>
                     </View>
@@ -570,7 +601,9 @@ export const WorkbenchScreen: React.FC<WorkbenchScreenProps> = ({
             <View style={styles.modalFooterHint}>
               <Ionicons name="information-circle-outline" size={12} color={COLORS.neonAmber} />
               <Text style={styles.modalFooterHintText}>
-                Üst sınıflar, 1. Sınıf mühendislik müfredatındaki tüm arıza modülleri çözüldüğünde açılacaktır.
+                {(data.maxUnlockedStage ?? 1) >= 4
+                  ? 'Tüm mühendislik sınıfları açıldı. Dilediğiniz sınıfın modüllerini inceleyebilirsiniz.'
+                  : 'Mevcut açık sınıflar arasında geçiş yapabilir, tamamladığınız görevleri inceleyebilirsiniz.'}
               </Text>
             </View>
           </View>
@@ -869,6 +902,10 @@ const styles = StyleSheet.create({
     borderRadius: 6,
     borderWidth: 1,
   },
+  optionBadgeActive: {
+    backgroundColor: 'rgba(6, 182, 212, 0.25)',
+    borderColor: COLORS.neonCyanBright,
+  },
   optionBadgeUnlocked: {
     backgroundColor: 'rgba(6, 182, 212, 0.15)',
     borderColor: COLORS.neonCyanBright,
@@ -879,6 +916,10 @@ const styles = StyleSheet.create({
   },
   optionBadgeText: {
     fontSize: 9,
+    fontWeight: '800',
+  },
+  optionBadgeTextActive: {
+    color: COLORS.neonCyanBright,
     fontWeight: '800',
   },
   optionBadgeTextUnlocked: {

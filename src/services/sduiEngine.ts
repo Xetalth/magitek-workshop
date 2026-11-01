@@ -5,6 +5,7 @@ import {
   ShopItem,
   WorkbenchModuleData,
   CustomerIssue,
+  ModuleEvalMetrics,
 } from '../types/sdui';
 import {
   CURRICULUM_MODULES,
@@ -16,6 +17,10 @@ import {
   REQUIRED_TASKS_PER_MODULE,
   PEDAGOGICAL_MODULES,
   CURRICULUM_MODULE_ORDER,
+  STAGE_1_MODULE_ORDER,
+  STAGE_2_MODULE_ORDER,
+  STAGE_3_MODULE_ORDER,
+  STAGE_4_MODULE_ORDER,
 } from '../data/curriculumData';
 import { CurriculumModuleId } from '../types/curriculum';
 import { geminiTaskService, GeminiTaskPayload } from './geminiTaskService';
@@ -29,11 +34,16 @@ export const USE_LIVE_AI = false; // Havuz testi ve kararlı demo modu
 
 interface InternalState {
   activeTab: TabType;
+  currentStage: number;
+  maxUnlockedStage: number;
+  currentViewStage: number;
   activeModuleId: ModuleId;
   currentWorkshopModuleId: ModuleId;
   completedModuleIds: ModuleId[];
   moduleTaskCounts: Record<string, number>;
   modulePoolIndices: Record<string, number>; // Hangi modülde tohum havuzunun hangi görevinin aktif olduğu
+  taskAttempts: Record<string, number>; // Hatalı yama derleme deneme sayacı
+  moduleTaskScores: Record<string, number[]>; // Modülde tamamlanan görevlerin başarı katsayıları
   dynamicModuleOrder: ModuleId[];
   gold: number;
   exp: number;
@@ -48,6 +58,25 @@ interface InternalState {
   purchasedShopItems: string[];
   isLoadingDynamicTask: boolean;
 }
+
+const MODULE_VERIFICATION_PROTOCOLS: Record<string, string> = {
+  module_1_control: 'GCC 13.2 -Werror -Wall',
+  module_2_arrays: 'AddressSanitizer (ASan) v13',
+  module_3_pointers: 'Valgrind Memcheck 3.22',
+  module_4_structs_bits: 'AVR-GCC -Wextra -O2',
+  stage2_module_1_oop_classes: 'Clang-Tidy Modernize-17',
+  stage2_module_2_oop_polymorphism: 'G++ 13.2 -Wnon-virtual-dtor',
+  stage2_module_3_linear_structures: 'UBSan UndefinedBehavior',
+  stage2_module_4_trees_indexing: 'LeakSanitizer (LSan)',
+  stage3_module_1_databases: 'ACID Transaction Invariant Test',
+  stage3_module_2_networking: 'Wireshark RFC-793 Checksum Fuzz',
+  stage3_module_3_software_testing: 'GoogleTest Boundary Asserts',
+  stage3_module_4_os_concurrency: 'ThreadSanitizer (TSan) v4',
+  stage4_module_1_software_architecture: 'ISO C++17 Acquire-Release Barrier',
+  stage4_module_2_machine_learning: 'SGD Loss Convergence Gate (MSE < 0.02)',
+  stage4_module_3_system_simulation: 'IEEE-754 Epsilon Precision Gate',
+  stage4_module_4_cryptography_security: 'Constant-Time Side-Channel Auditor',
+};
 
 const INITIAL_SHOP_ITEMS: ShopItem[] = [
   {
@@ -99,6 +128,9 @@ class SDUIEngineService {
   constructor() {
     this.state = {
       activeTab: 'workshop',
+      currentStage: 1,
+      maxUnlockedStage: 1,
+      currentViewStage: 1,
       activeModuleId: 'module_1_control',
       currentWorkshopModuleId: 'module_1_control',
       completedModuleIds: [],
@@ -114,6 +146,8 @@ class SDUIEngineService {
         module_3_pointers: 0,
         module_4_structs_bits: 0,
       },
+      taskAttempts: {},
+      moduleTaskScores: {},
       dynamicModuleOrder: [...CURRICULUM_MODULE_ORDER],
       gold: 150,
       exp: 20,
@@ -404,6 +438,8 @@ class SDUIEngineService {
         tempC: outcome.hardwareTempC,
       };
     } else {
+      const currentModId = this.state.activeModuleId;
+      this.state.taskAttempts[currentModId] = (this.state.taskAttempts[currentModId] || 0) + 1;
       this.state.inspectionStatus = 'OVERHEATING_FAILED';
       this.notify();
       return {
@@ -424,6 +460,27 @@ class SDUIEngineService {
     // Mevcut modüldeki çözülen görev sayısını artır
     const currentCount = (this.state.moduleTaskCounts[currentModuleId] || 0) + 1;
     this.state.moduleTaskCounts[currentModuleId] = currentCount;
+
+    // Hatalı deneme sayısına göre başarı katsayısını belirle:
+    // 1. Denemede Doğru (Hatasız): 1.0 (Tam Puan - %100)
+    // 2. Denemede Doğru (1 Hatalı Deneme Sonrası): 0.75 (%75)
+    // 3. Denemede Doğru veya Daha Fazla Hata: 0.25 (%25)
+    const failedAttempts = this.state.taskAttempts[currentModuleId] || 0;
+    let earnedCoeff = 1.0;
+    if (failedAttempts === 1) {
+      earnedCoeff = 0.75;
+    } else if (failedAttempts >= 2) {
+      earnedCoeff = 0.25;
+    }
+
+    const currentScores = this.state.moduleTaskScores[currentModuleId] || [];
+    this.state.moduleTaskScores[currentModuleId] = [...currentScores, earnedCoeff];
+
+    // Bir sonraki görev için deneme sayacını sıfırla
+    this.state.taskAttempts[currentModuleId] = 0;
+    if (this.state.activeModuleId) {
+      this.state.taskAttempts[this.state.activeModuleId] = 0;
+    }
 
     const isAlreadyCompleted = this.state.completedModuleIds.includes(currentModuleId);
     let rewardGold = modData.rewardGold;
@@ -463,38 +520,213 @@ class SDUIEngineService {
    * Eşiğe henüz ulaşılmadıysa aynı modülde bir sonraki görevi üretir.
    * Pedagojik Kural: Modül 1 bitmeden Modül 2'nin görevleri üretilmez!
    */
+  /**
+   * Aşama Geçişi (Stage 1 -> Stage 2: Mahalle Dükkanı)
+   */
+  public advanceToStage(stage: number): void {
+    this.state.currentStage = stage;
+    this.state.maxUnlockedStage = Math.max(this.state.maxUnlockedStage || 1, stage);
+    this.state.currentViewStage = stage;
+    this.state.exp = 0; // Seviye atlandığında XP barı %0'dan başlar
+
+    // Önceki aşamaların tamamlanmış modüllerini güvenceye al ve geçmiş başarılarını seed et
+    const prevStagesModules = stage === 4
+      ? [...STAGE_1_MODULE_ORDER, ...STAGE_2_MODULE_ORDER, ...STAGE_3_MODULE_ORDER]
+      : stage === 3
+      ? [...STAGE_1_MODULE_ORDER, ...STAGE_2_MODULE_ORDER]
+      : stage === 2
+      ? [...STAGE_1_MODULE_ORDER]
+      : [];
+
+    for (const modId of prevStagesModules) {
+      if (!this.state.completedModuleIds.includes(modId)) {
+        this.state.completedModuleIds.push(modId);
+      }
+      if (!this.state.moduleTaskScores[modId] || this.state.moduleTaskScores[modId].length === 0) {
+        this.state.moduleTaskScores[modId] = [1.0, 1.0, 1.0, 1.0];
+        this.state.moduleTaskCounts[modId] = REQUIRED_TASKS_PER_MODULE;
+      }
+    }
+
+    if (stage === 2) {
+      this.state.activeModuleId = 'stage2_module_1_oop_classes';
+      this.state.currentWorkshopModuleId = 'stage2_module_1_oop_classes';
+      this.state.selectedPatchId = null;
+      this.state.inspectionStatus = 'ANALYZING';
+      this.state.jobStatus = 'IN_WORKBENCH';
+      this.state.hardwareTempC = 44;
+      this.state.hardwareVoltage = 5.0;
+
+      // Kurye Jax'in ilk arıza görevini tohum havuzundan doğrudan yükle
+      const initialPoolIdx = this.getPoolIndex('stage2_module_1_oop_classes');
+      this.dynamicTasks['stage2_module_1_oop_classes'] = geminiTaskService.getStaticFallbackTask(
+        'stage2_module_1_oop_classes',
+        initialPoolIdx
+      );
+
+      this.state.terminalLogs = [
+        '--- 2. Aşama Başlatıldı: Mahalle Dükkanı ---',
+        'Mekân: Mahalle Dükkanı // Varoş Kademesi',
+        'Unvan: Lv.2 Deneyimli Mühendis',
+        'Müfredat: Samsun Üniversitesi YZM203 // Modül 1 (OOP & Sınıflar)',
+        'Müşteri Geldi: Kurye Jax (Varoş Pnömatik Hat Kuryesi)',
+        'Cihaz Algılandı: MCU-OOP-101 (Aero-Parcel v2)',
+        'Arıza: Constructor (Kurucu) ilklendirme eksikliği',
+        'İpucu: Tezgâhta arızalı C++ sınıfını inceleyip uygun yamayı seçin.',
+      ];
+    } else if (stage === 3) {
+      this.state.activeModuleId = 'stage3_module_1_databases';
+      this.state.currentWorkshopModuleId = 'stage3_module_1_databases';
+      this.state.selectedPatchId = null;
+      this.state.inspectionStatus = 'ANALYZING';
+      this.state.jobStatus = 'IN_WORKBENCH';
+      this.state.hardwareTempC = 42;
+      this.state.hardwareVoltage = 5.0;
+
+      // Leydi Aurelia'nın ilk arıza görevini tohum havuzundan doğrudan yükle (Tebrik/Placeholder NPC yok!)
+      const initialPoolIdx = this.getPoolIndex('stage3_module_1_databases');
+      this.dynamicTasks['stage3_module_1_databases'] = geminiTaskService.getStaticFallbackTask(
+        'stage3_module_1_databases',
+        initialPoolIdx
+      );
+
+      this.state.terminalLogs = [
+        '--- 3. Aşama Başlatıldı: Başkent Mağazası ---',
+        'Mekân: Başkent Mağazası // Merkez Kademe',
+        'Unvan: Lv.3 Tanınan Mühendis',
+        'Müfredat: Samsun Üniversitesi YZM307 // Modül 1 (Veritabanı & ACID İşlemleri)',
+        'Müşteri Geldi: Leydi Aurelia (Başkent Bankeri & Hazine Denetçisi)',
+        'Cihaz Algılandı: MCU-DB-301 (Aurum Ledger Matrix)',
+        'Arıza: Deadlock (Kilitlenme) & Eksik Rollback Mekanizması',
+        'İpucu: Tezgâhta transfer fonksiyonundaki kilit sıralamasını ve atomik geri alma mantığını onarın.',
+      ];
+    } else if (stage === 4) {
+      this.state.activeModuleId = 'stage4_module_1_software_architecture';
+      this.state.currentWorkshopModuleId = 'stage4_module_1_software_architecture';
+      this.state.selectedPatchId = null;
+      this.state.inspectionStatus = 'ANALYZING';
+      this.state.jobStatus = 'IN_WORKBENCH';
+      this.state.hardwareTempC = 38;
+      this.state.hardwareVoltage = 5.0;
+
+      // Baş Bilgin Alistair'in ilk arıza görevini tohum havuzundan doğrudan yükle (Tebrik NPC yok!)
+      const initialPoolIdx = this.getPoolIndex('stage4_module_1_software_architecture');
+      this.dynamicTasks['stage4_module_1_software_architecture'] = geminiTaskService.getStaticFallbackTask(
+        'stage4_module_1_software_architecture',
+        initialPoolIdx
+      );
+
+      this.state.terminalLogs = [
+        '--- 4. Aşama Başlatıldı: Kraliyet Laboratuvarı ---',
+        'Mekân: Kraliyet Laboratuvarı // Saray Kademesi',
+        'Unvan: Lv.4 Kraliyet Mühendisi',
+        'Müfredat: Samsun Üniversitesi YZM374 & YZM401 // Modül 1 (Yazılım Mimarisi & Bitirme)',
+        'Müşteri Geldi: Baş Bilgin Alistair (Kraliyet Baş Bilgini & Saray Başmühendisi)',
+        'Cihaz Algılandı: MCU-ROYAL-ARCH-01 (Kraliyet Magitek Çekirdek Matrisi)',
+        'Arıza: Thread-Safe Singleton / Çift Kontrollü Kilit ve Bellek Bariyeri Hatası',
+        'İpucu: Tezgâhta çift kontrollü kilit (Double-Checked Locking) ve donanımsal bellek bariyerini onarın.',
+      ];
+    }
+    this.notify();
+  }
+
+  /**
+   * Tezgâhta incelenecek sınıfı / aşamayı değiştirir (Geçmiş ve açık sınıfları inceleme)
+   */
+  public switchViewStage(stageNumber: number): void {
+    if (stageNumber < 1 || stageNumber > 4) return;
+    const maxUnlocked = Math.max(this.state.maxUnlockedStage || 1, this.state.currentStage);
+    if (stageNumber > maxUnlocked) return; // Kilitli aşamaya geçilemez
+
+    this.state.currentViewStage = stageNumber;
+
+    const targetOrder: string[] = stageNumber === 4
+      ? STAGE_4_MODULE_ORDER
+      : stageNumber === 3
+      ? STAGE_3_MODULE_ORDER
+      : stageNumber === 2
+      ? STAGE_2_MODULE_ORDER
+      : STAGE_1_MODULE_ORDER;
+
+    // Eğer şu anki aktif tezgâh modülü bu sınıfta değilse, bu sınıfın uygun modülüne odaklan
+    if (!targetOrder.includes(this.state.activeModuleId)) {
+      const uncompleted = targetOrder.find((id) => !this.state.completedModuleIds.includes(id));
+      const targetModId = uncompleted || targetOrder[0];
+      this.selectModule(targetModId);
+    }
+
+    const stageTitles: Record<number, string> = {
+      1: '1. Sınıf: Algoritmalar & C Programlama',
+      2: '2. Sınıf: Veri Yapıları & C++',
+      3: '3. Sınıf: Sistemler & İşletim Sistemleri',
+      4: '4. Sınıf: Kraliyet Mimarisi & İleri Sistemler',
+    };
+
+    this.state.terminalLogs = [
+      ...this.state.terminalLogs.slice(-6),
+      `--- Mühendislik Sınıfı Değiştirildi ---`,
+      `[AKTİF GÖRÜNÜM] ${stageTitles[stageNumber] || stageNumber + '. Sınıf'} modülleri tezgâha yüklendi.`,
+      `İpucu: Bu sınıfa ait modülleri inceleyebilir ve derleyebilirsiniz.`,
+    ];
+
+    this.notify();
+  }
+
+  public inspectStage(stageNumber: number): void {
+    this.switchViewStage(stageNumber);
+  }
+
   public async advanceToNextModule(): Promise<void> {
+    const isStage4 = this.state.currentStage === 4;
+    const isStage3 = this.state.currentStage === 3;
+    const isStage2 = this.state.currentStage === 2;
+    const activeOrder: string[] = isStage4
+      ? STAGE_4_MODULE_ORDER
+      : isStage3
+      ? STAGE_3_MODULE_ORDER
+      : isStage2
+      ? STAGE_2_MODULE_ORDER
+      : STAGE_1_MODULE_ORDER;
     const currentModuleId = this.state.currentWorkshopModuleId;
     const currentCount = this.state.moduleTaskCounts[currentModuleId] || 0;
     const thresholdReached = currentCount >= REQUIRED_TASKS_PER_MODULE;
-    const currentIndex = CURRICULUM_MODULE_ORDER.indexOf(currentModuleId as CurriculumModuleId);
+    const currentIndex = activeOrder.indexOf(currentModuleId);
 
     if (thresholdReached) {
       // Modül tamamlandı -> Sıradaki modüle geç
-      if (currentIndex >= 0 && currentIndex < CURRICULUM_MODULE_ORDER.length - 1) {
-        const nextId = CURRICULUM_MODULE_ORDER[currentIndex + 1];
+      if (currentIndex >= 0 && currentIndex < activeOrder.length - 1) {
+        const nextId = activeOrder[currentIndex + 1];
         this.state.currentWorkshopModuleId = nextId;
 
-        // Sıradaki modülün görevini tohum havuzundan hemen hazırla (Sıradaki alternatif tohum görevi)
         const nextPoolIdx = this.getPoolIndex(nextId);
         this.dynamicTasks[nextId] = geminiTaskService.getStaticFallbackTask(nextId, nextPoolIdx);
         this.selectModule(nextId);
         this.state.activeTab = 'workshop';
         this.notify();
 
-        // Canlı mod açıksa arka planda API'yi dene
         if (USE_LIVE_AI) {
           await this.fetchAndApplyDynamicTask(nextId, false);
         }
       } else {
-        // Tüm 4 modül tamamlandı (1. Sınıf Mezuniyeti)
+        // Bu aşamadaki tüm modüller tamamlandı
+        if (this.state.currentStage === 1) {
+          this.advanceToStage(2);
+          return;
+        }
+        if (this.state.currentStage === 2) {
+          this.advanceToStage(3);
+          return;
+        }
+        if (this.state.currentStage === 3) {
+          this.advanceToStage(4);
+          return;
+        }
         this.selectModule(currentModuleId);
         this.state.activeTab = 'workbench';
         this.notify();
       }
     } else {
-      // Eşik dolmadı (Örn: REQUIRED_TASKS_PER_MODULE = 4):
-      // AYNI modül için sıradaki tohum görevini havuzdan getir (Devir sayacı -> Buhar regülatörü -> Termostat)
+      // Eşik dolmadı:
       this.state.activeTab = 'workbench';
       this.state.selectedPatchId = null;
       this.state.inspectionStatus = 'ANALYZING';
@@ -614,56 +846,140 @@ class SDUIEngineService {
    */
   private toDeclarativeSDUI(): SDUIState {
     const activeModData = this.getModuleData(this.state.activeModuleId);
-    const completedCount = this.state.completedModuleIds.length;
-    const totalModules = CURRICULUM_MODULE_ORDER.length; // 4
+    const isStage4 = this.state.currentStage === 4;
+    const isStage3 = this.state.currentStage === 3;
+    const isStage2 = this.state.currentStage === 2;
+    const activeOrder: string[] = isStage4
+      ? STAGE_4_MODULE_ORDER
+      : isStage3
+      ? STAGE_3_MODULE_ORDER
+      : isStage2
+      ? STAGE_2_MODULE_ORDER
+      : STAGE_1_MODULE_ORDER;
+    const totalModules = activeOrder.length; // 4
+    const completedCount = activeOrder.filter((id) => this.state.completedModuleIds.includes(id)).length;
 
     // Seviye Unvanı
-    let levelTitle = 'Lv.1 Çırak Mühendis';
-    if (completedCount === 1) levelTitle = 'Lv.1 Kontrol Mühendisi';
-    else if (completedCount === 2) levelTitle = 'Lv.1 Dizi & Tampon Uzmanı';
-    else if (completedCount === 3) levelTitle = 'Lv.1 Gösterici & Bellek Mimarı';
-    else if (completedCount >= totalModules) levelTitle = 'Lv.2 Mezun Mühendis';
-
-    // 4. modül tamamlandığında arayüzdeki "1. Sınıf İlerlemesi" sayacı:
-    // '4/4 Modül Onaylandı - 1. Sınıf Mezuniyeti Tamamlandı'
-    let academicProgress = `1. Sınıf İlerlemesi: ${completedCount}/${totalModules} Modül Onaylandı`;
-    if (completedCount >= totalModules) {
-      academicProgress = '4/4 Modül Onaylandı - 1. Sınıf Mezuniyeti Tamamlandı';
+    let levelTitle = 'Lv.1 Acemi Mühendis';
+    if (isStage4) {
+      if (completedCount === 0) levelTitle = 'Lv.4 Kraliyet Mühendisi';
+      else if (completedCount === 1) levelTitle = 'Lv.4 Kraliyet Sistem Mimarı';
+      else if (completedCount === 2) levelTitle = 'Lv.4 Makine Öğrenmesi & Bilişsel Simyacı';
+      else if (completedCount === 3) levelTitle = 'Lv.4 Göksel Simülasyon Şefi';
+      else if (completedCount >= totalModules) levelTitle = 'Lv.4 Yüce Kraliyet Magitek Mimarı';
+    } else if (isStage3) {
+      if (completedCount === 0) levelTitle = 'Lv.3 Tanınan Mühendis';
+      else if (completedCount === 1) levelTitle = 'Lv.3 Veritabanı & İşlem Mimarı';
+      else if (completedCount === 2) levelTitle = 'Lv.3 Ağ & Protokol Uzmanı';
+      else if (completedCount === 3) levelTitle = 'Lv.3 Kalite & Test Başmühendisi';
+      else if (completedCount >= totalModules) levelTitle = 'Lv.4 Başmühendis & Lonca Lideri';
+    } else if (isStage2) {
+      if (completedCount === 0) levelTitle = 'Lv.2 Deneyimli Mühendis';
+      else if (completedCount === 1) levelTitle = 'Lv.2 OOP & Nesne Mimarı';
+      else if (completedCount === 2) levelTitle = 'Lv.2 Polimorfizm Uzmanı';
+      else if (completedCount === 3) levelTitle = 'Lv.2 Veri Yapıları Mimarı';
+      else if (completedCount >= totalModules) levelTitle = 'Lv.3 Usta Mühendis';
+    } else {
+      if (completedCount === 1) levelTitle = 'Lv.1 Kontrol Mühendisi';
+      else if (completedCount === 2) levelTitle = 'Lv.1 Dizi & Tampon Uzmanı';
+      else if (completedCount === 3) levelTitle = 'Lv.1 Gösterici & Bellek Mimarı';
+      else if (completedCount >= totalModules) levelTitle = 'Lv.2 Mezun Mühendis';
     }
+
+    // İlerleme Sayacı
+    let academicProgress = isStage4
+      ? `4. Aşama İlerlemesi: ${completedCount}/${totalModules} Modül Onaylandı`
+      : isStage3
+      ? `3. Aşama İlerlemesi: ${completedCount}/${totalModules} Modül Onaylandı`
+      : isStage2
+      ? `2. Aşama İlerlemesi: ${completedCount}/${totalModules} Modül Onaylandı`
+      : `1. Aşama İlerlemesi: ${completedCount}/${totalModules} Modül Onaylandı`;
+
+    if (completedCount >= totalModules) {
+      academicProgress = isStage4
+        ? '4/4 Modül Onaylandı - 4. Aşama Mezuniyeti Tamamlandı'
+        : isStage3
+        ? '4/4 Modül Onaylandı - 3. Aşama Mezuniyeti Tamamlandı'
+        : isStage2
+        ? '4/4 Modül Onaylandı - 2. Aşama Mezuniyeti Tamamlandı'
+        : '4/4 Modül Onaylandı - 1. Aşama Mezuniyeti Tamamlandı';
+    }
+
+    const currentBgKey: 'village' | 'suburb' | 'capital' | 'royal' = isStage4
+      ? 'royal'
+      : isStage3
+      ? 'capital'
+      : isStage2
+      ? 'suburb'
+      : 'village';
+
+    const currentClassTitle = isStage4
+      ? 'Kraliyet Laboratuvarı // Saray Kademesi'
+      : isStage3
+      ? 'Başkent Mağazası // Merkez Kademe'
+      : isStage2
+      ? 'Mahalle Dükkanı // Varoş Kademesi'
+      : 'Köy Atölyesi // Kırsal Kademe';
 
     const hudState = {
       levelTitle,
       expPercentage: this.state.exp,
-      classTitle: 'Samsun Üniv. Yazılım Müh. // 1. Sınıf Çekirdek Müfredatı',
+      classTitle: currentClassTitle,
       gold: this.state.gold,
       day: this.state.day,
       academicProgress,
+      stage: this.state.currentStage,
+      bgKey: currentBgKey,
     };
 
-    // Workshop State: Her zaman aktif atölye görevine bağlı kalır
+    // Workshop State: Aktif atölye modülüne doğrudan bağlanır (Placeholder Dorian kaldırıldı!)
     const workshopModId = this.state.currentWorkshopModuleId;
     const workshopCustomer = this.getCustomerData(workshopModId);
     const workshopModData = this.getModuleData(workshopModId);
     const currentTasksInMod = this.state.moduleTaskCounts[workshopModId] || 0;
-    const hasNextModule = completedCount < totalModules || currentTasksInMod < REQUIRED_TASKS_PER_MODULE;
+    const isStageComplete = completedCount >= totalModules;
+    const hasNextModule = !isStageComplete && (completedCount < totalModules || currentTasksInMod < REQUIRED_TASKS_PER_MODULE);
+
+    const jobStatus = this.state.jobStatus;
+    const rewardReport = {
+      gold: workshopModData.rewardGold,
+      exp: workshopModData.rewardExp,
+      deviceName: workshopModData.deviceName,
+      deviceCode: workshopModData.deviceCode,
+      statusText: `Stabil // Saha Testinde (${Math.min(currentTasksInMod, REQUIRED_TASKS_PER_MODULE)}/${REQUIRED_TASKS_PER_MODULE} Görev)`,
+    };
 
     const workshopState = {
       customer: workshopCustomer,
-      jobStatus: this.state.jobStatus,
+      jobStatus,
       activeModuleId: workshopModId,
-      rewardReport: {
-        gold: workshopModData.rewardGold,
-        exp: workshopModData.rewardExp,
-        deviceName: workshopModData.deviceName,
-        deviceCode: workshopModData.deviceCode,
-        statusText: `Stabil // Saha Testinde (${Math.min(currentTasksInMod, REQUIRED_TASKS_PER_MODULE)}/${REQUIRED_TASKS_PER_MODULE} Görev)`,
-      },
+      rewardReport,
       hasNextModule,
+      stage: this.state.currentStage,
+      bgKey: currentBgKey,
+      isStageCompleted: isStageComplete,
     };
 
-    // Tezgâh Görev Listesi: YALNIZCA tamamlanan görevler ve mevcut aktif görev gösterilir!
-    const unlockedLimit = CURRICULUM_MODULE_ORDER.indexOf(this.state.currentWorkshopModuleId as CurriculumModuleId);
-    const availableModules = CURRICULUM_MODULE_ORDER.slice(0, unlockedLimit + 1).map((id) => {
+    // Tezgâh Görev Listesi: Aktif aşamanın açık modülleri gösterilir
+    const viewStage = this.state.currentViewStage || this.state.currentStage;
+    const viewOrder: string[] = viewStage === 4
+      ? STAGE_4_MODULE_ORDER
+      : viewStage === 3
+      ? STAGE_3_MODULE_ORDER
+      : viewStage === 2
+      ? STAGE_2_MODULE_ORDER
+      : STAGE_1_MODULE_ORDER;
+
+    let unlockedLimit: number;
+    if (viewStage < this.state.currentStage) {
+      unlockedLimit = viewOrder.length - 1;
+    } else {
+      unlockedLimit = viewOrder.indexOf(this.state.currentWorkshopModuleId);
+      if (unlockedLimit === -1) {
+        unlockedLimit = viewOrder.length - 1;
+      }
+    }
+    const availableModules = viewOrder.slice(0, Math.max(0, unlockedLimit) + 1).map((id) => {
       const b = this.getModuleData(id);
       return {
         id,
@@ -686,7 +1002,7 @@ class SDUIEngineService {
       hardwareTelemetry: {
         temperatureC: this.state.hardwareTempC,
         voltageV: this.state.hardwareVoltage,
-        clockMhz: 16.0,
+        clockMhz: viewStage === 4 ? 128.0 : viewStage === 3 ? 64.0 : viewStage === 2 ? 32.0 : 16.0,
         statusText:
           this.state.hardwareTempC > 75
             ? 'AŞIRI ISINMA (OVERHEAT CRITICAL)'
@@ -697,37 +1013,98 @@ class SDUIEngineService {
       terminalLogs: this.state.terminalLogs,
       lastTestSuccess: this.state.lastTestSuccess,
       isLoadingDynamicTask: this.state.isLoadingDynamicTask,
+      maxUnlockedStage: Math.max(this.state.maxUnlockedStage || 1, this.state.currentStage),
+      currentViewStage: viewStage,
     };
 
-    // Skills State: Düğümler sırayla aktifleşsin
-    const nodes = CURRICULUM_MODULE_ORDER.map((id) => {
+    // Skills State: Aktif aşamaya göre yetenek ağacı
+    const nodes = activeOrder.map((id) => {
       const b = CURRICULUM_MODULES[id] || CURRICULUM_MODULES.module_1_control;
-      const ped = PEDAGOGICAL_MODULES[id];
+      const ped = PEDAGOGICAL_MODULES[id as CurriculumModuleId];
       const isCompleted = this.state.completedModuleIds.includes(id);
       const isCurrent = id === this.state.currentWorkshopModuleId;
       const isUnlocked = isCompleted || isCurrent;
       const tasksDone = this.state.moduleTaskCounts[id] || 0;
 
+      // Mühendislik Eval & Telemetri Karnesi Hesabı
+      let evalMetrics: ModuleEvalMetrics | undefined = undefined;
+      if (isUnlocked) {
+        const protocol = MODULE_VERIFICATION_PROTOCOLS[id] || 'GCC 13.2 -Werror';
+        const scores = this.state.moduleTaskScores[id] || [];
+        const solvedCount = scores.length;
+
+        // Bir modüldeki genel oran, o modüle ait çözülmüş görevlerin toplam katsayısının çözülen görev sayısına bölünmesiyle hesaplanır:
+        // Hesaplanan Yüzde = Math.round((Toplam Kazanılan Katsayı / Çözülen Görev Sayısı) * 100)
+        // Henüz hiçbir görevi tamamlanmamış (veya hiç çözülmemiş) modüllerde oran sayısal bir değer yerine null olarak tutulur.
+        const calculatedPercentage =
+          solvedCount > 0
+            ? Math.round((scores.reduce((sum, s) => sum + s, 0) / solvedCount) * 100)
+            : null;
+
+        const firstPassRate: number | null =
+          isCompleted && calculatedPercentage !== null
+            ? calculatedPercentage
+            : null;
+
+        const evalScore = isCompleted
+          ? (firstPassRate ?? 100)
+          : calculatedPercentage !== null
+          ? calculatedPercentage
+          : 0;
+
+        const failedAttempts = this.state.taskAttempts[id] || 0;
+        const regressionRisk: 'DÜŞÜK' | 'ORTA' | 'SIFIR' =
+          isCompleted
+            ? (firstPassRate ?? 100) >= 95
+              ? 'SIFIR'
+              : (firstPassRate ?? 100) >= 70
+              ? 'DÜŞÜK'
+              : 'ORTA'
+            : failedAttempts > 0
+            ? 'DÜŞÜK'
+            : 'SIFIR';
+
+        evalMetrics = {
+          firstPassRate,
+          regressionRisk,
+          evalScore,
+          verificationProtocol: protocol,
+        };
+      }
+
       return {
         ...b.skillNode,
-        id: ped.id,
-        name: ped.title,
-        tier: ped.tier,
+        id: ped?.id || id,
+        name: ped?.title || b.skillNode.name,
+        tier: ped?.tier || b.skillNode.tier,
         status: (isUnlocked ? 'UNLOCKED' : 'LOCKED') as 'UNLOCKED' | 'LOCKED',
-        description: ped.description,
-        academicCredit: ped.academicCredit,
-        curriculumTopic: ped.curriculumTopic,
+        description: ped?.description || '',
+        academicCredit: ped?.academicCredit || '',
+        curriculumTopic: ped?.curriculumTopic || '',
         isCompleted,
         isCurrent,
         taskProgress: `${Math.min(tasksDone, REQUIRED_TASKS_PER_MODULE)}/${REQUIRED_TASKS_PER_MODULE} Görev`,
-        allowedTopics: ped.allowedTopics,
-        forbiddenTopics: ped.forbiddenTopics,
+        allowedTopics: ped?.allowedTopics || [],
+        forbiddenTopics: ped?.forbiddenTopics || [],
+        evalMetrics,
       };
     });
 
     const skillsState = {
-      treeTitle: 'Samsun Üniversitesi Yazılım Mühendisliği 1. Sınıf Yetenekler Ağacı',
-      semesterTitle: '1. Sınıf (YZM101, YZM105, YZM102, YZM104) Pedagojik İlerleme Omurgası',
+      treeTitle: isStage4
+        ? 'Samsun Üniversitesi Yazılım Mühendisliği 4. Sınıf Yetenekler Ağacı'
+        : isStage3
+        ? 'Samsun Üniversitesi Yazılım Mühendisliği 3. Sınıf Yetenekler Ağacı'
+        : isStage2
+        ? 'Samsun Üniversitesi Yazılım Mühendisliği 2. Sınıf Yetenekler Ağacı'
+        : 'Samsun Üniversitesi Yazılım Mühendisliği 1. Sınıf Yetenekler Ağacı',
+      semesterTitle: isStage4
+        ? '4. Sınıf (YZM374, YZM401, YZM371, YZM362, YZM366, YZM376, YZM357) Pedagojik İlerleme Omurgası'
+        : isStage3
+        ? '3. Sınıf (YZM301, YZM303, YZM306, YZM307) Pedagojik İlerleme Omurgası'
+        : isStage2
+        ? '2. Sınıf (YZM201, YZM202, YZM203) Pedagojik İlerleme Omurgası'
+        : '1. Sınıf (YZM101, YZM105, YZM102, YZM104) Pedagojik İlerleme Omurgası',
       nodes,
     };
 
@@ -742,7 +1119,7 @@ class SDUIEngineService {
     };
 
     // Room State
-    const unlockedGadgets = CURRICULUM_MODULE_ORDER.map((id) => {
+    const unlockedGadgets = activeOrder.map((id) => {
       const b = CURRICULUM_MODULES[id] || CURRICULUM_MODULES.module_1_control;
       const isCompleted = this.state.completedModuleIds.includes(id);
       return {
@@ -752,17 +1129,40 @@ class SDUIEngineService {
     });
 
     const roomState = {
-      roomName: 'Mühendisin Arka Odası & Çalışma Masası',
-      ambianceText:
-        completedCount === 0
-          ? 'Oda henüz sade ve sessiz. Masada tek tük pirinç tamir aletleri duruyor.'
-          : completedCount === 4
-          ? 'Oda tıkır tıkır çalışan gömülü aygıtlar, osiloskop yeşili ekranlar ve 1. Sınıf Mezuniyet Beratıyla dolu bir magitek üssüne dönüştü!'
-          : `Tamamlanan modüllerle odaya ${completedCount} yeni donanım ve teşhis aparatı eklendi.`,
+      roomName: isStage4
+        ? 'Kraliyet Magitek Araştırma Laboratuvarı'
+        : isStage3
+        ? 'Başkent Mağazası Başmühendislik Laboratuvarı'
+        : isStage2
+        ? 'Mahalle Dükkanı Arka Ofisi'
+        : 'Mühendisin Arka Odası & Çalışma Masası',
+      ambianceText: isStage4
+        ? 'Sarayın zirvesinde yer alan Kraliyet Laboratuvarı; göksel pirinç teleskoplar, mana kristali reaktörleri, yapay zeka matrisleri ve şifreli telgraf konsollarıyla ışıldıyor.'
+        : isStage3
+        ? 'Başkent Mağazası arkasındaki yüksek teknoloji laboratuvarı; telgraf rezonatörleri, veritabanı kütükleri ve zırh çekirdeği telemetrisiyle parıldıyor.'
+        : isStage2
+        ? 'Mahalle Dükkanı arkasındaki ofis; pnomatik boru hatları, tramvay makas şemaları ve C++ veri yapısı kataloglarıyla donatılmış.'
+        : completedCount === 0
+        ? 'Oda henüz sade ve sessiz. Masada tek tük pirinç tamir aletleri duruyor.'
+        : completedCount === 4
+        ? 'Oda tıkır tıkır çalışan gömülü aygıtlar, osiloskop yeşili ekranlar ve 1. Aşama Mezuniyet Beratıyla dolu bir magitek üssüne dönüştü!'
+        : `Tamamlanan modüllerle odaya ${completedCount} yeni donanım ve teşhis aparatı eklendi.`,
       systemSpecs: {
-        arch: 'x86_64 POSIX Sandbox // Magitek AVR Core',
+        arch: isStage4
+          ? 'x86_64 POSIX // Magitek Royal Architecture & Cognitive Core'
+          : isStage3
+          ? 'x86_64 POSIX // Magitek Enterprise & Concurrency Core'
+          : isStage2
+          ? 'x86_64 POSIX // Magitek C++20 Core'
+          : 'x86_64 POSIX Sandbox // Magitek AVR Core',
         kernel: 'Magitek Linux 6.8.0-primer',
-        compiler: 'avr-gcc 13.2.0 (Embedded Toolchain)',
+        compiler: isStage4
+          ? 'g++ 14.2.0 (Royal Enterprise & Deep Systems Toolchain)'
+          : isStage3
+          ? 'g++ 14.1.0 (Enterprise Systems & POSIX Toolchain)'
+          : isStage2
+          ? 'g++ 13.2.0 (Modern C++ OOP Toolchain)'
+          : 'avr-gcc 13.2.0 (Embedded Toolchain)',
       },
       unlockedGadgets,
     };

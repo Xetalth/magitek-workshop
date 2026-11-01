@@ -51,7 +51,7 @@ export const TopHud: React.FC<TopHudProps> = ({ hud }) => {
       {/* Sınıf & Akademik İlerleme Çubuğu */}
       <View style={styles.bottomRow}>
         <View style={styles.curriculumRow}>
-          <Ionicons name="school-outline" size={13} color={COLORS.neonCyan} />
+          <Ionicons name="location-outline" size={13} color={COLORS.neonCyan} />
           <Text style={styles.classTitleText} numberOfLines={1}>
             {hud.classTitle}
           </Text>
@@ -106,16 +106,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     paddingVertical: 3,
     borderRadius: 8,
-    flexShrink: 1,
-    maxWidth: 155,
+    flexShrink: 0,
   },
   levelText: {
     color: COLORS.neonAmberBright,
     fontSize: 11,
     fontWeight: '700',
     letterSpacing: 0.2,
-    flexShrink: 1,
-    maxWidth: 125,
   },
   dayBadge: {
     flexDirection: 'row',
@@ -188,10 +185,9 @@ const styles = StyleSheet.create({
     fontFamily: 'monospace',
   },
   bottomRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 6,
+    flexDirection: 'column',
+    alignItems: 'flex-start',
+    gap: 4,
     marginTop: 6,
     paddingTop: 6,
     borderTopWidth: 1,
@@ -201,23 +197,22 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 5,
-    flex: 1,
-    flexShrink: 1,
+    width: '100%',
   },
   classTitleText: {
     color: COLORS.textSecondary,
     fontSize: 10.5,
     fontWeight: '600',
     letterSpacing: 0.1,
-    flexShrink: 1,
   },
   progressPill: {
     backgroundColor: 'rgba(16, 185, 129, 0.12)',
     borderWidth: 1,
     borderColor: 'rgba(16, 185, 129, 0.3)',
-    paddingHorizontal: 7,
+    paddingHorizontal: 8,
     paddingVertical: 2,
     borderRadius: 6,
+    alignSelf: 'flex-start',
   },
   progressPillText: {
     color: COLORS.neonGreenBright,

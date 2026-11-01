@@ -1,4 +1,5 @@
-import React from 'react';
+import React, { useState } from 'react';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   View,
   Text,
@@ -7,22 +8,55 @@ import {
   ImageBackground,
   Image,
   ScrollView,
+  ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { WorkshopState, ModuleId } from '../types/sdui';
 import { COLORS } from '../theme/colors';
 
 const workshopBg = require('../assets/images/workshop_bg.png');
-const npcImg = require('../assets/images/npc_halil.png');
+const suburbBgImg = require('../assets/images/suburb_workshop_bg.png');
+const capitalBgImg = require('../assets/images/capital_shop_bg.png');
+const royalBgImg = require('../assets/images/royal_lab_bg.png');
+const NPC_PORTRAITS: Record<string, any> = {
+  barnaby: require('../assets/images/npc_barnaby.png'),
+  linus: require('../assets/images/npc_linus.png'),
+  vane: require('../assets/images/npc_vane.png'),
+  silas: require('../assets/images/npc_silas.png'),
+  jax: require('../assets/images/npc_jax.png'),
+  nora: require('../assets/images/npc_nora.png'),
+  mordecai: require('../assets/images/npc_mordecai.png'),
+  bennett: require('../assets/images/npc_bennett.png'),
+  aurelia: require('../assets/images/npc_aurelia.png'),
+  zephyr: require('../assets/images/npc_zephyr.png'),
+  vivienne: require('../assets/images/npc_vivienne.png'),
+  hektor: require('../assets/images/npc_hektor.png'),
+  alistair: require('../assets/images/npc_alistair.png'),
+  seraphina: require('../assets/images/npc_seraphina.png'),
+  ignatius: require('../assets/images/npc_ignatius.png'),
+  valeria: require('../assets/images/npc_valeria.png'),
+};
 
 /**
  * NPC portresi altındaki rozet metnini üstteki müşteri adı ve avatar ile senkronize eder
  */
 const getCustomerBadgeText = (customer: { customerName: string; avatarKey: string }): string => {
+  if (customer.customerName.includes('Alistair')) return 'ALISTAIR';
+  if (customer.customerName.includes('Seraphina')) return 'SERAPHINA';
+  if (customer.customerName.includes('Ignatius')) return 'IGNATIUS';
+  if (customer.customerName.includes('Valeria')) return 'VALERIA';
+  if (customer.customerName.includes('Aurelia')) return 'AURELIA';
+  if (customer.customerName.includes('Zephyr')) return 'ZEPHYR';
+  if (customer.customerName.includes('Vivienne')) return 'VIVIENNE';
+  if (customer.customerName.includes('Hektor')) return 'HEKTOR';
   if (customer.customerName.includes('Linus')) return 'LINUS';
   if (customer.customerName.includes('Barnaby')) return 'BARNABY';
   if (customer.customerName.includes('Vane')) return 'VANE';
   if (customer.customerName.includes('Silas')) return 'SILAS';
+  if (customer.customerName.includes('Jax')) return 'JAX';
+  if (customer.customerName.includes('Nora')) return 'NORA';
+  if (customer.customerName.includes('Mordecai')) return 'MORDECAI';
+  if (customer.customerName.includes('Bennett')) return 'BENNETT';
   return customer.avatarKey.toUpperCase();
 };
 
@@ -40,13 +74,33 @@ export const WorkshopScreen: React.FC<WorkshopScreenProps> = ({
   onGoToWorkbench,
   onNextModule,
 }) => {
+  const insets = useSafeAreaInsets();
   const isDelivered = data.jobStatus === 'DELIVERED';
   const isReadyToDeliver = data.jobStatus === 'READY_TO_DELIVER';
   const reward = data.rewardReport;
   const hasNext = data.hasNextModule;
+  const isStage4 = data.stage === 4 || data.bgKey === 'royal';
+  const isStage3 = data.stage === 3 || data.bgKey === 'capital';
+  const isStage2 = data.stage === 2 || data.bgKey === 'suburb';
+  const currentBg = isStage4 ? royalBgImg : isStage3 ? capitalBgImg : isStage2 ? suburbBgImg : workshopBg;
+  const isStageTransitionReady = !hasNext || !!data.isStageCompleted;
+
+  const [isTransitioning, setIsTransitioning] = useState(false);
+
+  const handleNextButtonPress = () => {
+    if (isStageTransitionReady && !isStage4) {
+      setIsTransitioning(true);
+      setTimeout(() => {
+        setIsTransitioning(false);
+        onNextModule();
+      }, 1800);
+    } else {
+      onNextModule();
+    }
+  };
 
   return (
-    <ImageBackground source={workshopBg} style={styles.backgroundImage} resizeMode="cover">
+    <ImageBackground source={currentBg} style={styles.backgroundImage} resizeMode="cover">
       {/* Üst Kısım: Piksel atölye zeminini ferah bırakan boşluk */}
       <View style={styles.upperSpacer} />
 
@@ -54,7 +108,7 @@ export const WorkshopScreen: React.FC<WorkshopScreenProps> = ({
       <View style={styles.dialogContainer}>
         <ScrollView
           style={styles.dialogScroll}
-          contentContainerStyle={styles.dialogScrollContent}
+          contentContainerStyle={[styles.dialogScrollContent, { paddingBottom: 85 + insets.bottom }]}
           showsVerticalScrollIndicator={false}
         >
           {/* RPG Diyalog Kutusu */}
@@ -91,7 +145,11 @@ export const WorkshopScreen: React.FC<WorkshopScreenProps> = ({
             <View style={styles.dialogBody}>
               {/* NPC Portresi */}
               <View style={styles.portraitWrapper}>
-                <Image source={npcImg} style={styles.portraitImage} resizeMode="cover" />
+                <Image
+                  source={NPC_PORTRAITS[data.customer.avatarKey] || NPC_PORTRAITS.barnaby}
+                  style={styles.portraitImage}
+                  resizeMode="cover"
+                />
                 <View style={styles.avatarPill}>
                   <Text style={styles.avatarPillText}>{getCustomerBadgeText(data.customer)}</Text>
                 </View>
@@ -210,13 +268,19 @@ export const WorkshopScreen: React.FC<WorkshopScreenProps> = ({
                 {/* Tek Ana Eylem Butonu */}
                 <TouchableOpacity
                   style={styles.nextTaskButton}
-                  onPress={onNextModule}
+                  onPress={handleNextButtonPress}
                   activeOpacity={0.8}
                 >
                   <Text style={styles.nextTaskButtonText} numberOfLines={1}>
                     {hasNext
                       ? '➔ Sıradaki Mühendislik Görevine İlerle'
-                      : '➔ 1. Sınıf Müfredatı Tamamlandı (Tezgâha Git)'}
+                      : data.stage === 1
+                      ? '→ 2. Aşamaya Geç (Mahalle Dükkanı) ⚡'
+                      : data.stage === 2
+                      ? '→ 3. Aşamaya Geç (Başkent Mağazası) ⚡'
+                      : data.stage === 3
+                      ? '→ 4. Aşamaya Geç (Kraliyet Laboratuvarı) ⚡'
+                      : '➔ 4. Aşama Mühendislik Tezgâhı'}
                   </Text>
                   <Ionicons
                     name={hasNext ? 'arrow-forward-circle' : 'flash'}
@@ -229,6 +293,37 @@ export const WorkshopScreen: React.FC<WorkshopScreenProps> = ({
           </View>
         </ScrollView>
       </View>
+
+      {/* 2. Aşamaya Geçiş Sinematik Yükleme Katmanı (Transition Overlay) */}
+      {isTransitioning && (
+        <View style={styles.transitionOverlay}>
+          <View style={styles.transitionCard}>
+            <View style={styles.spinnerWrapper}>
+              <ActivityIndicator size="large" color={COLORS.neonAmberBright} />
+            </View>
+            <Ionicons
+              name="cog-outline"
+              size={34}
+              color={COLORS.neonAmberBright}
+              style={{ marginTop: 12 }}
+            />
+            <Text style={styles.transitionText}>
+              {isStage3
+                ? 'Kraliyet Hizmetine Kabul Edildiniz...\nKraliyet Magitek Laboratuvarı Kapılarını Açıyor... // Saray Kademesi'
+                : isStage2
+                ? 'Başkente Terfi Ediliyor...\nBüyük Mağaza Kapılarını Açıyor... // Merkez Kademe'
+                : 'Yeni Aşamaya Geçiliyor...\nMahalle Dükkanı Kapılarını Açıyor...'}
+            </Text>
+            <Text style={styles.transitionSubText}>
+              {isStage3
+                ? '// SARAY MAGİTEK PROTOKOLÜ DEVREDE //'
+                : isStage2
+                ? '// KRALİYET ŞEBEKE SENKRONİZASYONU DEVREDE //'
+                : '// SİSTEM KALİBRASYONU TAMAMLANIYOR //'}
+            </Text>
+          </View>
+        </View>
+      )}
     </ImageBackground>
   );
 };
@@ -322,18 +417,23 @@ const styles = StyleSheet.create({
   dialogBody: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    gap: 10,
+    gap: 12,
     marginTop: 2,
   },
   portraitWrapper: {
-    width: 76,
-    height: 76,
-    borderRadius: 12,
+    width: 115,
+    height: 115,
+    borderRadius: 14,
     borderWidth: 2,
     borderColor: COLORS.borderGold,
     overflow: 'hidden',
     backgroundColor: '#0f172a',
     position: 'relative',
+    shadowColor: COLORS.neonAmber,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 6,
+    elevation: 4,
   },
   portraitImage: {
     width: '100%',
@@ -341,16 +441,20 @@ const styles = StyleSheet.create({
   },
   avatarPill: {
     position: 'absolute',
-    bottom: 2,
+    bottom: 4,
     alignSelf: 'center',
-    backgroundColor: 'rgba(0,0,0,0.7)',
-    paddingHorizontal: 4,
-    borderRadius: 4,
+    backgroundColor: 'rgba(0,0,0,0.75)',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: 'rgba(245, 158, 11, 0.4)',
   },
   avatarPillText: {
-    fontSize: 7.5,
+    fontSize: 8.5,
     color: COLORS.neonAmberBright,
     fontWeight: '800',
+    letterSpacing: 0.5,
   },
   dialogTextCol: {
     flex: 1,
@@ -581,5 +685,54 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: 'bold',
     letterSpacing: 0.1,
+  },
+  transitionOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(11, 15, 25, 0.95)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 9999,
+    paddingHorizontal: 24,
+  },
+  transitionCard: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(15, 23, 42, 0.92)',
+    borderWidth: 1.5,
+    borderColor: COLORS.borderGold,
+    borderRadius: 16,
+    paddingVertical: 32,
+    paddingHorizontal: 28,
+    shadowColor: COLORS.neonAmber,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.45,
+    shadowRadius: 16,
+    elevation: 10,
+    width: '90%',
+    maxWidth: 340,
+  },
+  spinnerWrapper: {
+    marginBottom: 4,
+  },
+  transitionText: {
+    marginTop: 14,
+    color: COLORS.neonAmberBright,
+    fontSize: 15,
+    fontWeight: '700',
+    textAlign: 'center',
+    lineHeight: 23,
+    letterSpacing: 0.5,
+  },
+  transitionSubText: {
+    marginTop: 10,
+    color: COLORS.neonCyanBright,
+    fontSize: 9.5,
+    fontWeight: '700',
+    letterSpacing: 1.2,
+    textTransform: 'uppercase',
   },
 });

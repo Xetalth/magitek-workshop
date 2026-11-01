@@ -1,4 +1,4 @@
-export type TabType = 'shop' | 'skills' | 'workshop' | 'workbench' | 'room';
+export type TabType = 'skills' | 'workshop' | 'workbench';
 
 export type ModuleId = string;
 
@@ -9,6 +9,8 @@ export interface HudState {
   gold: number; // 🪙 Altın
   day: number; // Gün
   academicProgress: string; // "1. Sınıf: 2/4 Modül Tamamlandı"
+  stage?: number;
+  bgKey?: 'village' | 'suburb' | 'capital' | 'royal';
 }
 
 export interface CustomerIssue {
@@ -17,7 +19,7 @@ export interface CustomerIssue {
   dialogText: string;
   physicalSymptom: string;
   engineerDiagnosis: string;
-  avatarKey: 'barnaby' | 'vane' | 'silas' | 'dorian';
+  avatarKey: 'barnaby' | 'linus' | 'vane' | 'silas' | 'dorian' | 'jax' | 'nora' | 'mordecai' | 'bennett' | 'aurelia' | 'zephyr' | 'vivienne' | 'hektor' | 'alistair' | 'seraphina' | 'ignatius' | 'valeria';
 }
 
 export interface CodePatchOption {
@@ -75,6 +77,8 @@ export interface WorkbenchState {
   terminalLogs: string[];
   lastTestSuccess?: boolean;
   isLoadingDynamicTask?: boolean;
+  maxUnlockedStage?: number;
+  currentViewStage?: number;
 }
 
 export interface TaskRewardReport {
@@ -91,6 +95,16 @@ export interface WorkshopState {
   activeModuleId: ModuleId;
   rewardReport: TaskRewardReport;
   hasNextModule: boolean;
+  stage?: number;
+  bgKey?: 'village' | 'suburb' | 'capital' | 'royal';
+  isStageCompleted?: boolean;
+}
+
+export interface ModuleEvalMetrics {
+  firstPassRate: number | null;
+  regressionRisk: 'DÜŞÜK' | 'ORTA' | 'SIFIR';
+  evalScore: number;
+  verificationProtocol: string;
 }
 
 export interface SkillNode {
@@ -106,6 +120,7 @@ export interface SkillNode {
   taskProgress?: string;
   allowedTopics?: string[];
   forbiddenTopics?: string[];
+  evalMetrics?: ModuleEvalMetrics;
 }
 
 export interface SkillsState {
@@ -155,6 +170,6 @@ export interface SDUIState {
   workshop: WorkshopState;
   workbench: WorkbenchState;
   skills: SkillsState;
-  shop: ShopState;
-  room: RoomState;
+  shop?: ShopState;
+  room?: RoomState;
 }

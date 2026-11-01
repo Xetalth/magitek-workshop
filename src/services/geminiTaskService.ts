@@ -133,6 +133,90 @@ const MODULE_PEDAGOGICAL_TOPICS: Record<
       sampleDevice: 'Magitek Güç Dağıtım Panosu (Power-Grid MCU)',
     },
   ],
+  stage2_module_1_oop_classes: [
+    {
+      topic: 'Sınıf Kurucusunda (Constructor) Eksik İlklendirme',
+      faultHint: 'Kurucu fonksiyonda üye değişkenler initializer list ile atanmamış; çöp değer kalıyor.',
+      sampleDevice: 'Pnömatik Kargo Kapsül Takipçisi (Aero-Parcel v2)',
+    },
+  ],
+  stage2_module_2_oop_polymorphism: [
+    {
+      topic: 'Sanal Fonksiyon (virtual) Eksikliği & Vtable Hatası',
+      faultHint: 'Temel sınıfta virtual anahtar kelimesi unutulmuş; polimorfik çağrıda temel metot çalışıyor.',
+      sampleDevice: 'Varoş Buhar Tramvayı Makas Kontrolcüsü (Switch-Track 4)',
+    },
+  ],
+  stage2_module_3_linear_structures: [
+    {
+      topic: 'Dairesel Kuyruk (Circular Queue) İndis Sarma Hatası',
+      faultHint: 'rear = rear + 1 satırında % QUEUE_CAPACITY (modulo) unutulmuş; sınır aşılıyor.',
+      sampleDevice: 'Rehin Emanet Kayıt Matrisi (Pawn-Log 5x)',
+    },
+  ],
+  stage2_module_4_trees_indexing: [
+    {
+      topic: 'İkili Arama Ağacı (BST) Düğüm Ekleme Yön Tersliği',
+      faultHint: 'id < root->id durumunda sol yerine sağ çocuğa ekleme yapılmış; arama kuralı bozulmuş.',
+      sampleDevice: 'Mahalle Barikat Kütük Sicil Ağacı (Gate-BST 50)',
+    },
+  ],
+  stage3_module_1_databases: [
+    {
+      topic: 'Veritabanı Transaction Deadlock & Rollback Eksikliği',
+      faultHint: 'İşlem başarısız olduğunda rollback çağrılmamış ve hesap bakiyeleri tutarsız kalmış.',
+      sampleDevice: 'Banka Altın Transfer Defteri (Ledger-Core 3)',
+    },
+  ],
+  stage3_module_2_networking: [
+    {
+      topic: 'TCP Paket Sıralama ve Bozuk Checksum Doğrulama',
+      faultHint: 'Paket dizisinde seq_num sıralaması ve checksum hesaplama formülü eksik uygulanmış.',
+      sampleDevice: 'Başkent Telgraf Yönlendiricisi (Metro-Switch 10G)',
+    },
+  ],
+  stage3_module_3_software_testing: [
+    {
+      topic: 'Birim Test & Assertion Sınır Durum Hatası',
+      faultHint: 'Açısal hız sınırında assert kontrolü yanlış eşikle yapılmış; birim test çöküyor.',
+      sampleDevice: 'Kraliyet Otomat Eklem Denetleyicisi (Servo-Assert X)',
+    },
+  ],
+  stage3_module_4_os_concurrency: [
+    {
+      topic: 'Mutex Senkronizasyonu & Çoklu İş Parçacığı Yarış Durumu',
+      faultHint: 'Paylaşılan güç çekirdeği yazmacına erişimde mutex kilidi alınmamış; veri bozuluyor.',
+      sampleDevice: 'Kraliyet Mekanize Zırh Güç Çekirdeği (Armor-Core V)',
+    },
+  ],
+  stage4_module_1_software_architecture: [
+    {
+      topic: 'Thread-Safe Singleton & Donanımsal Bellek Bariyeri (DCLP)',
+      faultHint: 'Çift kontrollü kilitte bellek bariyeri olmadığı için yarım nesne sızıyor.',
+      sampleDevice: 'Kraliyet Magitek Çekirdek Matrisi (Royal-Core Matrix v4)',
+    },
+  ],
+  stage4_module_2_machine_learning: [
+    {
+      topic: 'Gradyan İnişi, Öğrenme Oranı Iraksaması & Özellik Normalizasyonu',
+      faultHint: 'Aşırı yüksek öğrenme oranı ve ölçeklenmemiş girdiler gradyan patlamasına yol açıyor.',
+      sampleDevice: 'Mana Reaktörü Sıcaklık Tahminleyicisi (Aether-Predictor ML)',
+    },
+  ],
+  stage4_module_3_system_simulation: [
+    {
+      topic: 'Kayan Nokta Hassasiyeti (Epsilon) & Ayrık Olay Kuyruğu Zamanlaması',
+      faultHint: 'Kayan nokta doğrudan eşitlik karşılaştırması (==) yuvarlama sapması yüzünden tutmuyor.',
+      sampleDevice: 'Göksel Yörünge Simülatörü (Celestial Orrery-Sim 4)',
+    },
+  ],
+  stage4_module_4_cryptography_security: [
+    {
+      topic: 'Sabit Zamanlı Karşılaştırma & Zamanlama Yan Kanalı Koruması',
+      faultHint: 'Erken dönen (early-exit) dize karşılaştırması timing attack sızıntısı doğuruyor.',
+      sampleDevice: 'Kraliyet Şifreli Telgraf Terminali (CipherNet-Cryptor X)',
+    },
+  ],
 };
 
 /**

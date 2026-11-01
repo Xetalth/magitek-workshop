@@ -1,5 +1,6 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Platform } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { TabType } from '../types/sdui';
 import { COLORS } from '../theme/colors';
@@ -19,12 +20,6 @@ interface TabItemConfig {
 
 const TABS: TabItemConfig[] = [
   {
-    id: 'shop',
-    label: 'Mağaza',
-    icon: 'cart-outline',
-    activeIcon: 'cart',
-  },
-  {
     id: 'skills',
     label: 'Yetenekler',
     icon: 'git-network-outline',
@@ -42,12 +37,6 @@ const TABS: TabItemConfig[] = [
     icon: 'hammer-outline',
     activeIcon: 'hammer',
   },
-  {
-    id: 'room',
-    label: 'Oda',
-    icon: 'home-outline',
-    activeIcon: 'home',
-  },
 ];
 
 export const BottomTabBar: React.FC<BottomTabBarProps> = ({
@@ -55,8 +44,12 @@ export const BottomTabBar: React.FC<BottomTabBarProps> = ({
   hasWorkbenchAlert = false,
   onTabChange,
 }) => {
+  const insets = useSafeAreaInsets();
+  const bottomPadding = Math.max(insets.bottom, 10);
+  const containerHeight = 60 + bottomPadding;
+
   return (
-    <View style={styles.tabBarContainer}>
+    <View style={[styles.tabBarContainer, { paddingBottom: bottomPadding, height: containerHeight }]}>
       <View style={styles.tabBar}>
         {TABS.map((tab) => {
           const isActive = activeTab === tab.id;
@@ -119,7 +112,7 @@ const styles = StyleSheet.create({
   },
   tabBar: {
     flexDirection: 'row',
-    justifyContent: 'space-around',
+    justifyContent: 'space-evenly',
     alignItems: 'center',
   },
   tabButton: {

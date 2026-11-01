@@ -1,5 +1,6 @@
 import React from 'react';
-import { View, Text, StyleSheet, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, Platform } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { SkillsState } from '../types/sdui';
 import { COLORS } from '../theme/colors';
@@ -10,12 +11,16 @@ interface SkillsScreenProps {
 }
 
 export const SkillsScreen: React.FC<SkillsScreenProps> = ({ data }) => {
+  const insets = useSafeAreaInsets();
   const completedCount = data.nodes.filter((n) => n.isCompleted).length;
   const totalCount = data.nodes.length;
   const allCompleted = completedCount >= totalCount;
 
   return (
-    <ScrollView style={styles.screen} contentContainerStyle={styles.contentContainer}>
+    <ScrollView
+      style={styles.screen}
+      contentContainerStyle={[styles.contentContainer, { paddingBottom: 85 + insets.bottom }]}
+    >
       {/* Başlık ve Ağaç Bilgisi */}
       <View style={[styles.headerCard, allCompleted && styles.headerCardAllCompleted]}>
         <View style={styles.headerTop}>
@@ -235,6 +240,51 @@ export const SkillsScreen: React.FC<SkillsScreenProps> = ({ data }) => {
                         ]}
                       >
                         {node.taskProgress}
+                      </Text>
+                    </View>
+                  )}
+                </View>
+
+                {/* Mühendislik Eval & Telemetri Karnesi */}
+                <View style={styles.evalContainer}>
+                  <View style={styles.evalHeaderRow}>
+                    <Ionicons name="hardware-chip-outline" size={11} color={COLORS.neonAmberBright} />
+                    <Text style={styles.evalHeaderTitle}>MÜHENDİSLİK EVAL & TELEMETRİ KARNESİ</Text>
+                  </View>
+
+                  {isUnlocked && node.evalMetrics ? (
+                    <View style={styles.evalBadgesRow}>
+                      {/* İlk Deneme Başarısı (Pass Rate) */}
+                      <View style={styles.evalBadgePass}>
+                        <Ionicons name="checkmark-done" size={11} color={COLORS.neonGreenBright} />
+                        <Text style={styles.evalBadgeTextPass}>
+                          {isCompleted && node.evalMetrics.firstPassRate !== null && node.evalMetrics.firstPassRate !== undefined
+                            ? `✓ %${node.evalMetrics.firstPassRate} İlk Geçiş`
+                            : '✓ - İlk Geçiş'}
+                        </Text>
+                      </View>
+
+                      {/* Regresyon Riski (Regression) */}
+                      <View style={styles.evalBadgeRegression}>
+                        <Ionicons name="shield-outline" size={11} color={COLORS.neonCyanBright} />
+                        <Text style={styles.evalBadgeTextRegression}>
+                          🛡 Regresyon: {node.evalMetrics.regressionRisk}
+                        </Text>
+                      </View>
+
+                      {/* Doğrulama Protokolü */}
+                      <View style={styles.evalBadgeProtocol}>
+                        <Ionicons name="cog-outline" size={11} color={COLORS.neonAmber} />
+                        <Text style={styles.evalBadgeTextProtocol}>
+                          ⚙ {node.evalMetrics.verificationProtocol}
+                        </Text>
+                      </View>
+                    </View>
+                  ) : (
+                    <View style={styles.evalLockedRow}>
+                      <Ionicons name="hourglass-outline" size={11} color={COLORS.textMuted} />
+                      <Text style={styles.evalLockedText}>
+                        [Beklemede: Önkoşul Testi Bekleniyor]
                       </Text>
                     </View>
                   )}
@@ -597,6 +647,93 @@ const styles = StyleSheet.create({
     color: COLORS.neonAmberBright,
   },
   taskProgressTextLocked: {
+    color: COLORS.textMuted,
+  },
+  // Mühendislik Eval & Telemetri Karnesi Stilleri
+  evalContainer: {
+    backgroundColor: 'rgba(5, 10, 20, 0.65)',
+    borderRadius: 8,
+    padding: 8,
+    marginTop: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(56, 189, 248, 0.15)',
+    gap: 6,
+  },
+  evalHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+  },
+  evalHeaderTitle: {
+    fontSize: 9,
+    fontWeight: '800',
+    letterSpacing: 0.5,
+    color: COLORS.neonAmberBright,
+  },
+  evalBadgesRow: {
+    flexDirection: 'row',
+    gap: 6,
+    flexWrap: 'wrap',
+    alignItems: 'center',
+  },
+  evalBadgePass: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: 'rgba(16, 185, 129, 0.12)',
+    borderColor: 'rgba(16, 185, 129, 0.35)',
+    borderWidth: 1,
+    borderRadius: 6,
+    paddingHorizontal: 7,
+    paddingVertical: 3,
+  },
+  evalBadgeTextPass: {
+    fontSize: 9.5,
+    fontWeight: '700',
+    color: COLORS.neonGreenBright,
+  },
+  evalBadgeRegression: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: 'rgba(6, 182, 212, 0.12)',
+    borderColor: 'rgba(6, 182, 212, 0.35)',
+    borderWidth: 1,
+    borderRadius: 6,
+    paddingHorizontal: 7,
+    paddingVertical: 3,
+  },
+  evalBadgeTextRegression: {
+    fontSize: 9.5,
+    fontWeight: '700',
+    color: COLORS.neonCyanBright,
+  },
+  evalBadgeProtocol: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: 'rgba(245, 158, 11, 0.08)',
+    borderColor: 'rgba(245, 158, 11, 0.25)',
+    borderWidth: 1,
+    borderRadius: 6,
+    paddingHorizontal: 7,
+    paddingVertical: 3,
+  },
+  evalBadgeTextProtocol: {
+    fontSize: 9,
+    fontWeight: '600',
+    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
+    color: '#e2e8f0',
+  },
+  evalLockedRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    paddingVertical: 2,
+  },
+  evalLockedText: {
+    fontSize: 9.5,
+    fontStyle: 'italic',
     color: COLORS.textMuted,
   },
 });
